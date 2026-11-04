@@ -34,6 +34,16 @@ Updates are signed with the key of `mygo keygen`, `keys/mygo-update.key` in the 
 
    If a job fails, don't publish; fix it first.
 
+   **If the macOS job sits queued.** GitHub's `macos-latest` runners run short of capacity, and a job can wait a quarter of an hour and then be cancelled without ever starting. Windows and Linux finish in minutes meanwhile, so the draft is left with everything but the Mac. Don't publish that: a Mac that checks for updates asks for `update-darwin-arm64.json`, and a release without it answers 404.
+
+   Build the Mac here instead, with the key in `keys/` and `gh` signed in, which uploads to the same draft the workflow made:
+
+   ```bash
+   go tool mygo build -platform "darwin/arm64,darwin/amd64" -upload
+   ```
+
+   It writes the DMGs, the archives, the deltas from the last two versions and both `update-darwin-*.json`, then merges the new checksums into the draft's `SHA256SUMS`. Cancel the queued job afterwards, so it cannot upload over them if it does start.
+
 5. Publish the draft and mark it latest:
 
    ```bash
@@ -45,6 +55,15 @@ Updates are signed with the key of `mygo keygen`, `keys/mygo-update.key` in the 
    ```bash
    curl -sL https://github.com/yxxbc/haruhikage-app/releases/latest/download/update-darwin-arm64.json
    ```
+
+   A signed manifest is only half of it: check the archive the manifest points at, not just the manifest. A build whose key did not match signs nothing, and `mygo build` says so and carries on, so the release looks complete while every Mac refuses to update:
+
+   ```bash
+   curl -sL https://github.com/yxxbc/haruhikage-app/releases/latest/download/update-darwin-arm64.json \
+     | jq -r .url | xargs curl -sL -o /tmp/u.tar.gz
+   ```
+
+   Then check `/tmp/u.tar.gz` untars into a 春日影.app whose version is this one.
 
 ## The speech recognition libraries
 
