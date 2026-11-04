@@ -161,23 +161,34 @@ func TestBackdropStyles(t *testing.T) {
 	}
 
 	// A settings file of the Fog switch's time keeps the fog it chose, and
-	// one that left it off stays still; a file that names a backdrop is
-	// left alone, whatever the switch says.
+	// one that names a backdrop keeps that, whatever the switch says. A
+	// file that names neither is one from before there was a choice, and
+	// takes the backdrop the app starts with.
 	for _, c := range []struct {
-		fog  bool
-		name string
-		want string
+		fog, fogSet, backdropSet bool
+		name, want               string
 	}{
-		{true, "", "fog"},
-		{false, "", ""},
-		{true, "latent", "latent"},
-		{false, "latent", "latent"},
+		{true, true, false, "", "fog"},       // the switch was on
+		{false, true, false, "", "latent"},   // the switch was off, so the default
+		{true, true, true, "latent", "latent"}, // a named backdrop wins
+		{true, true, true, "partita", "partita"}, // a backdrop named wins
+		{false, false, true, "fog", "fog"},   // named, switch never written
+		{false, false, false, "", "latent"},  // neither: a file from before
 	} {
 		s := defaultSettings()
-		s.Fog, s.Backdrop = c.fog, c.name
+		s.Fog, s.fogSet, s.backdropSet = c.fog, c.fogSet, c.backdropSet
+		if c.name != "" {
+			s.Backdrop = c.name
+		}
 		s.migrateFog()
 		if s.Backdrop != c.want {
-			t.Errorf("fog %v, backdrop %q: migrated to %q, want %q", c.fog, c.name, s.Backdrop, c.want)
+			t.Errorf("fog=%v fogSet=%v backdropSet=%v name=%q: migrated to %q, want %q",
+				c.fog, c.fogSet, c.backdropSet, c.name, s.Backdrop, c.want)
 		}
+	}
+	// A new install takes 隐现 and the automatic curve.
+	n := defaultSettings()
+	if n.Backdrop != "latent" || !n.Equalizer || n.EQPreset != "auto" {
+		t.Errorf("a new install: backdrop %q, equalizer %v, curve %q", n.Backdrop, n.Equalizer, n.EQPreset)
 	}
 }

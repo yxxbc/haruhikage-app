@@ -81,10 +81,17 @@ type settings struct {
 	LyricOffsets map[int64]int `json:"lyricOffsets,omitempty"`
 
 	path string // where they were loaded from, and are saved to
+	// backdropSet and fogSet say the settings file named those fields
+	// itself, rather than taking the defaults: a file that did not must
+	// not be read as having chosen the default backwards.
+	backdropSet, fogSet bool
 }
 
 func defaultSettings() settings {
-	return settings{NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true, AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true}
+	// A new listener gets 隐现 as the backdrop and the equalizer on its
+	// automatic curve: both read well out of the box and cost nothing to
+	// try, which is not true of a fog that runs the GPU all night.
+	return settings{NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true, AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, Backdrop: "latent", Equalizer: true, EQPreset: "auto"}
 }
 
 func settingsPath() (string, error) {
@@ -136,11 +143,20 @@ func moveDir(old, dir string) {
 }
 
 // loadSettings reads the settings, or returns the defaults.
+//
+// A field the file does not have keeps the default, which is what new
+// settings take as they are added; the backdrop is the exception, since
+// the default for it is not empty and the file's silence must not read as
+// a choice. So the file's own words are read too, for that one.
 func loadSettings() settings {
 	s := defaultSettings()
 	if path, err := settingsPath(); err == nil {
 		if b, err := os.ReadFile(path); err == nil {
+			var named map[string]json.RawMessage
+			json.Unmarshal(b, &named)
 			json.Unmarshal(b, &s)
+			_, s.backdropSet = named["backdrop"]
+			_, s.fogSet = named["fog"]
 		}
 		s.path = path
 	}
@@ -153,10 +169,19 @@ func loadSettings() settings {
 // backdrop already is left as it is, so a listener who turned the fog off
 // after choosing another does not have it turned back on.
 func (s *settings) migrateFog() {
-	if s.Backdrop != "" || !s.Fog {
-		return
+	switch {
+	case s.backdropSet:
+		// The file names a backdrop: it is what the listener chose, and
+		// the old switch says nothing more about it.
+	case s.fogSet && s.Fog:
+		// Only the switch, and it was on: the fog it chose.
+		s.Backdrop = "fog"
+	case s.fogSet && !s.Fog:
+		// Only the switch, and it was off: the backdrop the app starts
+		// with, which is what a listener who turned the fog off wanted.
+	default:
+		// Neither: a settings file from before there was a choice.
 	}
-	s.Backdrop = "fog"
 }
 
 // save keeps the settings where they were loaded from; defaults that were

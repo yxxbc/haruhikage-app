@@ -137,7 +137,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 		if a.npPane == paneStage {
 			// The stage takes the whole view: the lyrics are the show, the
 			// controls a slim bar at the foot.
-			reveal(ui.Row(c.Key("tabs")).Absolute().Top(topBar(c)).Right(48).Gap(6), pointerIn).Children(func() {
+			reveal(ui.Row(c.Key("tabs")).Absolute().Top(topBar(c)).Right(npViewRight).Gap(6), pointerIn).Children(func() {
 				a.stageStyleButton(c)
 				a.paneTabs(c)
 			})
@@ -199,7 +199,11 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				// The pane starts level with the cover beside it. Its tabs come
 				// and go with the pointer, so they sit above it, out of the flow,
 				// never over it.
-				tabs := ui.Row(c.Key("tabs")).Absolute().Left(0).Gap(6)
+				// The tabs keep to the window's right edge, where the stage's
+				// are, so that switching to the stage moves none of them: the
+				// pane ends at the view's right padding, so its own right edge
+				// is where the stage's tabs start from.
+				tabs := ui.Row(c.Key("tabs")).Absolute().Right(0).Gap(6)
 				b, tb := pane.LayoutBounds(), tabs.LayoutBounds()
 				if b.H > 0 && tb.H > 0 && coverTop > 0 {
 					if top := max(coverTop-b.Y, tb.H+8); top != a.npPaneTop {
@@ -253,6 +257,10 @@ func (a *app) lyricsPaneChosen() int {
 	}
 	return paneLyrics
 }
+
+// npViewRight is the view's right padding: the panes end there, and so do
+// the stage's tabs, so that switching between them moves no tab sideways.
+const npViewRight = 72
 
 // The panes of Now Playing.
 const (
@@ -438,7 +446,7 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32, tint ui.Co
 		scroll.Invisible()
 	}
 	defer a.quietCard(c, dim, h*0.18)
-	a.timedLines(c, scroll, lines, lpos, cur, lag, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet, ink: lyricInk(tint)}, nil)
+	a.timedLines(c, scroll, lines, lpos, cur, lag, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet, ink: lyricInk(tint), centred: true}, nil)
 }
 
 // linesStyle is how timedLines sets its lines: the size, weight and
@@ -451,6 +459,10 @@ type linesStyle struct {
 	// ink is what the words are set in: white over a dark backdrop, a deep
 	// shade over a light one, where white would be lost (lyricInk).
 	ink ui.Color
+	// centred sets the lines in the middle of the pane, as the stage sets
+	// them: the two are one view of the same words, and a line that jumped
+	// sideways as the listener switched between them would read as a bug.
+	centred bool
 }
 
 // timedLines fills scroll with lines that follow the track playing at
@@ -464,7 +476,16 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 	scroll.Children(func() {
 		ui.Column(c).Gap(6).Translate(0, -lag).Children(func() {
 			for i, l := range lines {
-				line := ui.ButtonBase(c.Key(i)).Column().AlignItems(ui.Start).Padding(10, 12).Radius(12).Gap(6).FocusRing(false).Label(l.Text)
+				align := ui.Start
+				if st.centred {
+					// The row takes the pane's width and centres within it: a
+					// row as wide as its words would centre on nothing.
+					align = ui.Center
+				}
+				line := ui.ButtonBase(c.Key(i)).Column().AlignItems(align).Padding(10, 12).Radius(12).Gap(6).FocusRing(false).Label(l.Text)
+				if st.centred {
+					line.Grow(1)
+				}
 				on := i == cur
 				alpha := float32(0.28)
 				if on {
