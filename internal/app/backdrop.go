@@ -128,12 +128,14 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 	style := backdropStyleByID(a.settings.Backdrop)
 	fog, still := style.moves, c.Preferences().ReduceMotion
 	ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
-		// The CPU, drawing the fog for want of a GPU, paints far fewer
-		// pixels, and those once a song: the fog stays still.
+		// A backdrop that moves is painted at the window's own resolution:
+		// anything coarser would stretch its dither into visible tiles on
+		// the way up. The CPU, drawing for want of a GPU, paints far fewer
+		// pixels, and those once a song: it stays still.
 		gpu := p.Accelerated()
 		div := float32(8)
 		if fog && gpu {
-			div = 2
+			div = 1
 		}
 		cw, ch := int(r.W/div)+1, int(r.H/div)+1
 		bd := &a.backdropCache

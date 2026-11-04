@@ -121,10 +121,12 @@ func fbm(p vec2) float {
 // never repeat as a grid.
 func fluid(uv vec2, t float) float {
 	p := uv * vec2(2.6, 1.9)
-	q := vec2(fbm(p + vec2(0, t*0.06)), fbm(p + vec2(5.2, 1.3) + vec2(t*0.05, 0)))
+	// The drift is fast enough to see inside a verse: a field that moves
+	// by a hundredth of itself a second looks like a still picture.
+	q := vec2(fbm(p + vec2(0, t*0.28)), fbm(p + vec2(5.2, 1.3) + vec2(t*0.22, 0)))
 	// A second warp bends the first, so the shapes curl into one another.
-	r := vec2(fbm(p + 2.4*q + vec2(1.7, 9.2) + vec2(t*0.035, 0)),
-		fbm(p + 2.4*q + vec2(8.3, 2.8) - vec2(0, t*0.03)))
+	r := vec2(fbm(p + 2.4*q + vec2(1.7, 9.2) + vec2(t*0.16, 0)),
+		fbm(p + 2.4*q + vec2(8.3, 2.8) - vec2(0, t*0.14)))
 	return fbm(p + 2.1*r)
 }
 
@@ -165,10 +167,22 @@ func Fragment(dst vec4, pos vec2) vec4 {
 
 	// The dither, warped by the same field so the grain follows the flow:
 	// cells slide and shear with it instead of forming a grid.
-	bend := (f-0.5)*26.0
-	cell := 2.5
-	gx := int((pos.x+bend) / cell)
-	gy := int((pos.y+bend*0.6) / cell)
+	//
+	// Its size is in pixels of the window, not of this canvas, which is
+	// painted at whatever size the painter runs at: a cell of a fixed count
+	// of canvas pixels would grow and shrink with the window, and a 2px one
+	// stretched up from a half-size canvas reads as tiles, not as grain.
+	// The field bends the coordinates the cells are counted in, not a
+	// constant added to them: an offset would only walk the 4x4 pattern
+	// around its own ring, leaving the same texture sitting on the picture
+	// however the fluid turned.
+	// A cell is a fixed share of the height, so the grain keeps its density
+	// whether the canvas is a retina buffer or a small one, and does not
+	// grow into tiles when the backdrop is painted at another size.
+	flow := vec2(fbm(uv*7.0+vec2(Time*0.05, 0)), fbm(uv*7.0+vec2(3.3, Time*0.04)))
+	cell := size.y / 300.0
+	gx := int((pos.x+flow.x*60.0) / cell)
+	gy := int((pos.y+flow.y*60.0) / cell)
 	th := bayer4(gx, gy)
 	dither := mix(Back.rgb, A.rgb, th)
 	sl := c + (2.0*dither-1.0)*(sqrt(max(c, vec3(0.0)))-c)
