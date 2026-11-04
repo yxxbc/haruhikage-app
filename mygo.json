@@ -1,0 +1,21 @@
+{
+  "name": "春日影",
+  "identifier": "dev.yxxbc.haruhikage",
+  "slug": "haruhikage",
+  "version": "0.1.20",
+  "out": "build",
+  "updates": {
+    "publicKey": "B2ClDpOtADuBgvwV3kBnQsQzOR5Cv6dSm3zWcZ/oTwM=",
+    "github": "yxxbc/haruhikage",
+    "privateKey": "keys/mygo-update.key"
+  },
+  "macos": {
+    "icon": "icon/AppIcon.icon",
+    "minimumSystemVersion": "13.0"
+  },
+  "linux": {
+    "comment": "第三方网易云音乐桌面客户端",
+    "categories": ["AudioVideo", "Audio", "Player"],
+    "webview": false
+  }
+}

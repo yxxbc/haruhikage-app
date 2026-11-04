@@ -1,0 +1,6 @@
+/build/
+/.mygo/
+mygo_windows_*.syso
+/haruhikage
+/node_modules/
+.DS_Store
