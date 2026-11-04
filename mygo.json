@@ -14,7 +14,7 @@
     "minimumSystemVersion": "13.0"
   },
   "linux": {
-    "comment": "第三方网易云音乐桌面客户端",
+    "comment": "跨平台音乐播放器",
     "categories": ["AudioVideo", "Audio", "Player"],
     "webview": false
   }

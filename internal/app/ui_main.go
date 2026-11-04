@@ -406,7 +406,7 @@ func (a *app) loadHome() {
 				// Loading the new day's again, what shows stays, to try
 				// once more.
 				if len(a.featured) == 0 && len(a.charts) == 0 {
-					a.homeErr = "无法连接网易云音乐，请检查网络"
+					a.homeErr = "无法连接服务器，请检查网络"
 				}
 				return
 			}

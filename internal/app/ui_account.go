@@ -167,7 +167,7 @@ func (a *app) loginDialog(c *ui.Context) {
 		panel.Width(340).Padding(28, 28, 26, 28).Radius(22).Gap(6).AlignItems(ui.Center).
 			Background(p.bg).Border(1, p.hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
 			Transition(ui.ElementTransition{Animation: &ui.Snappy, Enter: &ui.Motion{Scale: 0.94}, Exit: &ui.Motion{Scale: 0.96}})
-		title, sub := "扫码登录", "打开网易云音乐 App，扫一扫登录"
+		title, sub := "扫码登录", "打开手机 App，扫一扫登录"
 		switch {
 		case l.finished:
 			title, sub = "登录成功", "欢迎回来，"+a.profileName()
@@ -257,7 +257,7 @@ func (a *app) accountRow(c *ui.Context) {
 			ui.Box(c).Size(26, 26).Radius(13).Background(p.press).Center().Children(func() {
 				ui.Icon(c, iconUser).Size(14, 14).TextColor(p.muted)
 			})
-			ui.Text(c, "登录网易云音乐").FontSize(13).FontWeight(500).TextColor(p.muted)
+			ui.Text(c, "登录").FontSize(13).FontWeight(500).TextColor(p.muted)
 		})
 		if b.Clicked() {
 			a.openLogin()

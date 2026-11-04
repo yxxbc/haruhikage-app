@@ -10,7 +10,7 @@ export const mygo = 'https://mygo.egoist.dev'
 
 export const site = {
   name: '春日影',
-  title: '春日影 — 原生的网易云音乐桌面客户端',
+  title: '春日影 — 原生的音乐播放器',
   description:
-    '用 Go 与 MyGo 写成的第三方网易云音乐桌面客户端。原生界面，没有 WebView；边下边播，无损与 Hi-Res，逐字歌词与「律动」，刘海播放器。',
+    '用 Go 与 MyGo 写成的跨平台音乐播放器。原生界面，没有 WebView；边下边播，无损与 Hi-Res，逐字歌词与「律动」，刘海播放器。',
 }

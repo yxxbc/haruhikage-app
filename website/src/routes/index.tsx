@@ -25,7 +25,7 @@ function Hero() {
       <div class="grooves" aria-hidden="true" />
       <div class="hero-text">
         <p class="eyebrow">
-          <span class="pill">开源</span>第三方网易云音乐桌面客户端
+          <span class="pill">开源</span>跨平台音乐播放器
         </p>
         <h1 class="display hero-title">
           <span>原生地，</span>
@@ -44,7 +44,7 @@ function Hero() {
             查看源代码
           </a>
         </div>
-        <p class="fine">免费 · 以 AGPL-3.0 开源 · 扫码登录你的网易云账号</p>
+        <p class="fine">免费 · 以 AGPL-3.0 开源 · 扫码登录你的账号</p>
       </div>
       <div class="hero-window">
         <AppWindow />
@@ -93,7 +93,7 @@ const features: Feature[] = [
   {
     icon: 'qr',
     title: '扫码登录',
-    body: '用网易云音乐 App 扫一扫。登录态保存在系统凭据存储中。',
+    body: '用手机 App 扫一扫。登录态保存在系统凭据存储中。',
   },
   {
     icon: 'notch',
