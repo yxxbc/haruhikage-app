@@ -2,8 +2,6 @@
 
 用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的跨平台音乐播放器，原生界面，无 WebView。
 
-> 本项目 fork 自 [egoist/mygo-cloudmusic](https://github.com/egoist/mygo-cloudmusic)，按 AGPL-3.0 继续开源。
-
 ## 功能
 
 - 推荐、歌单、排行榜与我的收藏

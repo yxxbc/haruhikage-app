@@ -1,10 +1,10 @@
 import { createSignal } from 'solid-js'
 
-// The song the window in the hero plays.
+// The song the window in the hero plays. It ships no audio: the song is
+// theirs, and the demo shows the player, not the music.
 export const track = {
   title: '春日影',
   artist: 'MyGO!!!!!',
-  src: '/haruhikage.m4a',
   duration: 281,
 }
 
@@ -13,43 +13,35 @@ const [position, setPosition] = createSignal(62)
 const [liked, setLiked] = createSignal(false)
 export { playing, position, liked, setLiked }
 
-// Made on the first play, so the page doesn't download the song until then.
-let audio: HTMLAudioElement | undefined
+// The position the demo plays from, counted on by the clock rather than by
+// a player: the progress bar, the cover and the "playing" state all follow
+// it, so the window still shows what playing looks like.
 let frame = 0
+let last = 0
 
-function element() {
-  if (audio) return audio
-  audio = new Audio(track.src)
-  audio.loop = true
-  audio.currentTime = position()
-  // The browser can pause it on its own, from the media keys or another tab.
-  audio.addEventListener('pause', () => {
-    setPlaying(false)
-    cancelAnimationFrame(frame)
+function tick(now: number) {
+  if (last === 0) last = now
+  const seconds = (now - last) / 1000
+  last = now
+  setPosition((p) => {
+    const next = p + seconds
+    // Like the track, the demo starts over at its end.
+    return next >= track.duration ? next % track.duration : next
   })
-  return audio
-}
-
-// timeupdate only fires a few times a second, too coarse for the progress bar.
-function tick() {
-  if (audio) setPosition(audio.currentTime)
   frame = requestAnimationFrame(tick)
 }
 
 export function play() {
   if (playing()) return
   setPlaying(true)
-  element()
-    .play()
-    .then(() => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(tick)
-    })
-    .catch(() => setPlaying(false))
+  cancelAnimationFrame(frame)
+  last = 0
+  frame = requestAnimationFrame(tick)
 }
 
 export function pause() {
-  audio?.pause()
+  setPlaying(false)
+  cancelAnimationFrame(frame)
 }
 
 export function toggle() {
@@ -59,7 +51,6 @@ export function toggle() {
 export function seek(fraction: number) {
   const p = Math.max(0, Math.min(1, fraction)) * track.duration
   setPosition(p)
-  if (audio) audio.currentTime = p
 }
 
 export function clock(seconds: number) {
