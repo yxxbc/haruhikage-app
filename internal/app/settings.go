@@ -48,10 +48,15 @@ type settings struct {
 	// HotComments shows a song's hot comments in its quiet parts, in
 	// place of the lyrics (quietComment): the listener turns it on.
 	HotComments bool `json:"hotComments"`
-	// Fog fills Now Playing's backdrop with fog of the cover's color,
-	// rising and swelling with the bass: an experiment the listener turns
-	// on.
-	Fog bool `json:"fog"`
+	// Backdrop is what Now Playing paints behind the lyrics (backdropStyles):
+	// "" the still gradient the settings written before there was a choice
+	// mean, "fog" its fog, "latent" the fluid mesh. The old Fog setting is
+	// read into it once, by migrateFog.
+	Backdrop string `json:"backdrop,omitempty"`
+	// Fog is what the backdrop used to be chosen by: true for the fog, and
+	// nothing else. Kept so that a settings file of that time goes on
+	// showing the fog it chose.
+	Fog bool `json:"fog,omitempty"`
 	// AppIcon is where the app's icon shows on macOS (appIcons); elsewhere
 	// it is always in the notification area.
 	AppIcon string `json:"appIcon"`
@@ -63,6 +68,10 @@ type settings struct {
 	CacheMB int `json:"cacheMB"`
 	// SearchHistory keeps submitted keywords, most recent first.
 	SearchHistory []string `json:"searchHistory,omitempty"`
+	// LyricOffsets moves each song's lyrics against its music, in
+	// milliseconds, by track: a correction a listener makes once holds
+	// the next time they play it (ui_lyric_offset.go).
+	LyricOffsets map[int64]int `json:"lyricOffsets,omitempty"`
 
 	path string // where they were loaded from, and are saved to
 }
@@ -128,7 +137,19 @@ func loadSettings() settings {
 		}
 		s.path = path
 	}
+	s.migrateFog()
 	return s
+}
+
+// migrateFog carries a settings file's old Fog switch over to the backdrop
+// it chose: the fog, or the still one the switch left. A file that names a
+// backdrop already is left as it is, so a listener who turned the fog off
+// after choosing another does not have it turned back on.
+func (s *settings) migrateFog() {
+	if s.Backdrop != "" || !s.Fog {
+		return
+	}
+	s.Backdrop = "fog"
 }
 
 // save keeps the settings where they were loaded from; defaults that were

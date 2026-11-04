@@ -453,10 +453,11 @@ func SongURL(id int64, level string) (*Stream, error) {
 	return &s, nil
 }
 
-// Lyrics returns a track's timed lyrics, their translation if any, and
-// its word-timed lyrics (YRC) where NetEase has them, which only the
-// desktop client's API serves.
-func Lyrics(id int64) (lrc, translation, yrc string, err error) {
+// Lyrics returns a track's timed lyrics, their translation if any, its
+// word-timed lyrics (YRC) where NetEase has them, which only the desktop
+// client's API serves, and its romaji, which NetEase has hand-checked for
+// Japanese songs.
+func Lyrics(id int64) (lrc, translation, yrc, romaji string, err error) {
 	var res struct {
 		Lrc struct {
 			Lyric string `json:"lyric"`
@@ -464,21 +465,31 @@ func Lyrics(id int64) (lrc, translation, yrc string, err error) {
 		Tlyric struct {
 			Lyric string `json:"lyric"`
 		} `json:"tlyric"`
+		Romalrc struct {
+			Lyric string `json:"lyric"`
+		} `json:"romalrc"`
 	}
 	q := url.Values{"id": {strconv.FormatInt(id, 10)}, "lv": {"1"}, "tv": {"-1"}}
 	if err = get("/api/song/lyric", q, &res); err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	var words struct {
 		Yrc struct {
 			Lyric string `json:"lyric"`
 		} `json:"yrc"`
+		Yromalrc struct {
+			Lyric string `json:"lyric"`
+		} `json:"yromalrc"`
 	}
 	data := map[string]any{"id": strconv.FormatInt(id, 10), "cp": false, "tv": 0, "lv": 0, "rv": 0, "kv": 0, "yv": 0, "ytv": 0, "yrv": 0}
 	if eapiPost("/api/song/lyric/v1", data, &words) == nil {
 		yrc = words.Yrc.Lyric
+		romaji = words.Yromalrc.Lyric
 	}
-	return res.Lrc.Lyric, res.Tlyric.Lyric, yrc, nil
+	if romaji == "" {
+		romaji = res.Romalrc.Lyric
+	}
+	return res.Lrc.Lyric, res.Tlyric.Lyric, yrc, romaji, nil
 }
 
 // Sized asks the image CDN for a picture of n×n pixels.

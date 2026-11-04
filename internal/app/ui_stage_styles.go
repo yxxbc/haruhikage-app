@@ -12,51 +12,91 @@ import (
 	"github.com/yxxbc/haruhikage-app/internal/lyrics"
 )
 
-// The stage sets its lyrics in one of the styles of Folia's visualizers
-// (github.com/chthollyphile/folia-major), named as Folia names them: 流光,
-// its classic (ui_stage.go); 云阶, which stacks a line in staggered rows,
-// each springing in as it is sung; and 倾诉, which breaks a line into a
-// few large lines, one of them leaning, its characters swelling as they
-// are sung.
-var stageStyles = []struct{ id, label string }{
-	{"", "流光"},
-	{"partita", "云阶"},
-	{"tilt", "倾诉"},
+// A stageStyle is one way the stage sets its lyrics: Folia's visualizers
+// (github.com/chthollyphile/folia-major), named as Folia names them.
+//
+// The list is the one place a style is described: the button that names
+// it, the menu that chooses it, the frame it asks for and the test that
+// budgets its frames all ask here rather than naming styles of their own,
+// so a style added below needs nothing else changed.
+type stageStyle struct {
+	// id is what the settings keep; "" is the classic, which a settings
+	// file written before there were styles means.
+	id string
+	// label is what the button and the menu call it.
+	label string
+	// lead is how long before its first word a style shows part of a
+	// line, where it needs longer than to draw the line due.
+	lead time.Duration
+	// draw shows a line as it is at pos, the whole line at opacity fade.
+	// It is what the style is: the rest is where it fits in.
+	draw func(a *app, c *ui.Context, l *lyrics.Line, at stageFrame)
 }
 
-// stageStyleButton names the stage's style, and opens the menu of the
-// others.
-func (a *app) stageStyleButton(c *ui.Context) {
-	label := stageStyles[0].label
+// stageFrame is what a style draws a line into: the view it is in, where
+// in the line playback is, and how large its text and the view are.
+type stageFrame struct {
+	pos    time.Duration
+	f      float32 // the size of the line's text
+	w, h   float32 // the view's size
+	fade   float32 // the line's opacity, as it comes and goes
+	accent ui.Color
+}
+
+// stageStyles are the styles, the classic first: a settings file names one
+// by its id, and one it does not name is the classic.
+var stageStyles = []stageStyle{
+	{
+		id:    "",
+		label: "流光",
+		draw: (*app).classicLine,
+	},
+	{
+		id:    "partita",
+		label: "云阶",
+		draw: func(a *app, c *ui.Context, l *lyrics.Line, at stageFrame) {
+			a.partitaLine(c, l, at.pos, at.f, at.h, at.fade, at.accent)
+		},
+	},
+	{
+		id:    "tilt",
+		label: "倾诉",
+		lead:  tiltLead,
+		draw: func(a *app, c *ui.Context, l *lyrics.Line, at stageFrame) {
+			tiltLine(c, l, at.pos, at.w, at.fade, at.accent, a.settings.StageSparks)
+		},
+	},
+	{
+		id:    "xinxiang",
+		label: "心象",
+		draw: func(a *app, c *ui.Context, l *lyrics.Line, at stageFrame) {
+			a.xinxiangLine(c, l, at.pos, at.f, at.w, at.fade, at.accent)
+		},
+	},
+	{
+		id:    "glitch",
+		label: "故障",
+		draw: func(a *app, c *ui.Context, l *lyrics.Line, at stageFrame) {
+			a.glitchLine(c, l, at.pos, at.f, at.w, at.fade, at.accent)
+		},
+	},
+}
+
+// stageStyleByID returns the style with id, or the classic for one no
+// style has: a settings file may name a style this version dropped.
+func stageStyleByID(id string) stageStyle {
 	for _, s := range stageStyles {
-		if s.id == a.settings.StageStyle {
-			label = s.label
+		if s.id == id {
+			return s
 		}
 	}
-	b := ui.ButtonBase(c.Key("stage-style")).Padding(6, 10, 6, 14).Radius(999).Gap(4).AlignItems(ui.Center).
-		FocusRing(false).Label("律动效果").Tooltip("律动效果")
-	bg, fg := ui.Transparent, white.Alpha(0.55)
-	if b.Hovered() {
-		bg, fg = white.Alpha(0.06), white.Alpha(0.8)
-	}
-	b.Background(b.AnimateColor("bg", bg, ui.Animation{Duration: 120 * time.Millisecond}))
-	b.Children(func() {
-		ui.Text(c, label).FontSize(13).FontWeight(600).TextColor(fg)
-		ui.Icon(c, iconDown).Size(12, 12).TextColor(fg)
-	})
-	b.Menu(func(m *ui.Menu) {
-		for _, s := range stageStyles {
-			if m.Item(s.label).Checked(a.settings.StageStyle == s.id).Chosen() && a.settings.StageStyle != s.id {
-				a.settings.StageStyle = s.id
-				a.settings.save()
-			}
-		}
-		m.Separator()
-		if m.Item("火花").Checked(a.settings.StageSparks).Chosen() {
-			a.settings.StageSparks = !a.settings.StageSparks
-			a.settings.save()
-		}
-	})
+	return stageStyles[0]
+}
+
+// stageLead is how long before its first word the style chosen shows part
+// of a line.
+func stageLead(id string) time.Duration {
+	return stageStyleByID(id).lead
 }
 
 // sparkTime is how long a word's sparks fly.

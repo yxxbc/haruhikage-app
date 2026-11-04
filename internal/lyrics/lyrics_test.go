@@ -29,7 +29,7 @@ func TestParseYRC(t *testing.T) {
 	yrc := `{"t":0,"c":[{"tx":"作词: "},{"tx":"某人"}]}
 [13010,4780](13010,660,0)从(13670,670,0)不(14340,30,0) (14370,480,0)主
 [17790,1770](17790,170,0)I(17960,450,0) (18410,290,0)love`
-	lines := Build("", "[00:13.00]Never\n[00:17.80]我爱", yrc)
+	lines := Build("", "[00:13.00]Never\n[00:17.80]我爱", yrc, "")
 	if len(lines) != 2 || !lines[0].Timed {
 		t.Fatalf("lines %+v", lines)
 	}

@@ -104,3 +104,80 @@ func TestTiltSplitsAtPunctuation(t *testing.T) {
 		t.Errorf("split at %d, not after 星，", parts[0].to)
 	}
 }
+
+// Every style the settings can name is one the stage has: a settings file
+// naming a style this version does not know gets the classic, and one that
+// does gets the style itself, so a style is added by its entry alone.
+func TestStageStyleRegistry(t *testing.T) {
+	seen := map[string]bool{}
+	for _, s := range stageStyles {
+		if seen[s.id] {
+			t.Errorf("%q is in the list twice", s.id)
+		}
+		seen[s.id] = true
+		if s.label == "" {
+			t.Errorf("%q has no label to show", s.id)
+		}
+		if s.draw == nil {
+			t.Errorf("%q has nothing to draw it", s.id)
+		}
+		if got := stageStyleByID(s.id); got.id != s.id || got.label != s.label {
+			t.Errorf("looking up %q: %q, %q", s.id, got.id, got.label)
+		}
+	}
+	// The classic is the first, the one a settings file that names no style
+	// means, so the button has a name to fall back to.
+	if stageStyles[0].id != "" {
+		t.Errorf("the first style is %q, not the classic", stageStyles[0].id)
+	}
+	if got := stageStyleByID("dropped-in-a-later-version"); got.id != "" {
+		t.Errorf("a style this version does not have gives %q", got.id)
+	}
+}
+
+// Every backdrop the settings can name is one the player has, and a name
+// this version does not know is the still one: a settings file outlives
+// the version that wrote it. The old Fog switch carries over to the
+// backdrop it chose.
+func TestBackdropStyles(t *testing.T) {
+	seen := map[string]bool{}
+	for _, b := range backdropStyles {
+		if seen[b.id] {
+			t.Errorf("%q is in the list twice", b.id)
+		}
+		seen[b.id] = true
+		if b.label == "" || b.draw == nil {
+			t.Errorf("%q has no label or nothing to draw it", b.id)
+		}
+		if got := backdropStyleByID(b.id); got.id != b.id {
+			t.Errorf("looking up %q gives %q", b.id, got.id)
+		}
+	}
+	if backdropStyles[0].id != "" {
+		t.Errorf("the first backdrop is %q, not the still one", backdropStyles[0].id)
+	}
+	if got := backdropStyleByID("dropped-later"); got.id != "" {
+		t.Errorf("a backdrop this version does not have gives %q", got.id)
+	}
+
+	// A settings file of the Fog switch's time keeps the fog it chose, and
+	// one that left it off stays still; a file that names a backdrop is
+	// left alone, whatever the switch says.
+	for _, c := range []struct {
+		fog  bool
+		name string
+		want string
+	}{
+		{true, "", "fog"},
+		{false, "", ""},
+		{true, "latent", "latent"},
+		{false, "latent", "latent"},
+	} {
+		s := defaultSettings()
+		s.Fog, s.Backdrop = c.fog, c.name
+		s.migrateFog()
+		if s.Backdrop != c.want {
+			t.Errorf("fog %v, backdrop %q: migrated to %q, want %q", c.fog, c.name, s.Backdrop, c.want)
+		}
+	}
+}

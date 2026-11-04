@@ -125,7 +125,8 @@ type backdropCache struct {
 // backdrop paints the backdrop behind Now Playing, still or fog.
 func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 	pl := a.pl
-	fog, still := a.settings.Fog, c.Preferences().ReduceMotion
+	style := backdropStyleByID(a.settings.Backdrop)
+	fog, still := style.moves, c.Preferences().ReduceMotion
 	ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
 		// The CPU, drawing the fog for want of a GPU, paints far fewer
 		// pixels, and those once a song: the fog stays still.
@@ -156,13 +157,10 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 			}
 			bd.art, bd.tint, bd.fog, bd.at = art, tint, fog, now
 			bass := bd.level.group(0, 6)
+			level := bd.level.group(0, player.Bands)
 			bd.canvas.Draw(p, func(cp *ui.Painter) {
 				box := ui.Rect{W: float32(cw), H: float32(ch)}
-				if fog {
-					drawFog(cp, box, tint, float32(bd.drift), bass)
-				} else {
-					drawBackdrop(cp, box, art, tint)
-				}
+				style.draw(cp, box, art, tint, float32(bd.drift), bass, level)
 			})
 		}
 		p.Image(bd.canvas.Bitmap(), r, ui.FillBox)

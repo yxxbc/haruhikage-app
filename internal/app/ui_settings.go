@@ -244,8 +244,21 @@ func (a *app) settingsView(c *ui.Context) {
 					a.changed()
 				}
 			})
-			row("烟雾背景", "播放页的背景化作封面色调的烟雾，缓缓升起，随低音起伏；仍在打磨，会多用一些电量", func() {
-				if ui.Switch(c.Key("fog"), &s.Fog).Label("烟雾背景").Changed() {
+			row("播放页背景", a.backdropDesc(), func() {
+				labels := make([]string, len(backdropStyles))
+				chosen := backdropStyles[0].label
+				for i, b := range backdropStyles {
+					labels[i] = b.label
+					if b.id == s.Backdrop {
+						chosen = b.label
+					}
+				}
+				if ui.Select(c.Key("backdrop"), &chosen, labels).Label("播放页背景").Width(120).Changed() {
+					for _, b := range backdropStyles {
+						if b.label == chosen {
+							s.Backdrop = b.id
+						}
+					}
 					a.changed()
 				}
 			})

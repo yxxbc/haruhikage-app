@@ -10,14 +10,17 @@ import (
 	"unicode/utf8"
 )
 
-// A Line is a line of timed lyrics, with its translation if any, and
-// when each of its words is sung.
+// A Line is a line of timed lyrics, with its translation if any, its
+// romaji for Japanese, and when each of its words is sung.
 type Line struct {
 	At          time.Duration
 	End         time.Duration
 	Text        string
 	Translation string
-	Words       []Word
+	// Romaji is the line in Latin letters, for Japanese lyrics: NetEase's
+	// hand-checked reading where it has one, else the kana read here.
+	Romaji string
+	Words  []Word
 	// Timed says the words carry their own times, as NetEase's word-timed
 	// lyrics give them; else they share the line's time evenly.
 	Timed bool
@@ -109,8 +112,8 @@ func parseYRC(yrc string) []Line {
 
 // Build makes the lines to show from what NetEase serves: the
 // word-timed lyrics where there are some, else the timed lines, with the
-// translation of each.
-func Build(lrc, translation, yrc string) []Line {
+// translation of each and its romaji for Japanese.
+func Build(lrc, translation, yrc, romaji string) []Line {
 	var lines []Line
 	if yrc != "" {
 		lines = parseYRC(yrc)
@@ -150,13 +153,40 @@ func Build(lrc, translation, yrc string) []Line {
 			lines[best].Translation = t.Text
 		}
 	}
+	// NetEase's romaji, hand-checked, goes the same way; a line it does not
+	// cover, or a song without one, is read from its kana instead.
+	checked := make(map[int]bool)
+	for _, r := range parseLRC(romaji) {
+		if r.Text == "" {
+			continue
+		}
+		best, bestGap := -1, 1500*time.Millisecond
+		for i := range lines {
+			gap := lines[i].At - r.At
+			if gap < 0 {
+				gap = -gap
+			}
+			if gap < bestGap {
+				best, bestGap = i, gap
+			}
+		}
+		if best >= 0 && !checked[best] {
+			checked[best] = true
+			lines[best].Romaji = r.Text
+		}
+	}
+	for i := range lines {
+		if lines[i].Romaji == "" {
+			lines[i].Romaji = Romaji(lines[i].Text)
+		}
+	}
 	return lines
 }
 
 // mergeLyrics pairs timed lines with their translations, without words'
 // own times.
 func mergeLyrics(lrc, translation string) []Line {
-	return Build(lrc, translation, "")
+	return Build(lrc, translation, "", "")
 }
 
 // SpreadWords splits text into words, each Chinese, Japanese or Korean

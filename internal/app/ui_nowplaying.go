@@ -188,8 +188,9 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				ui.Box(c).Margin(14, 0, 18, 0).Children(func() {
 					a.transport(c, white, white.Alpha(0.45), accent, 28)
 				})
-				ui.Row(c).Justify(ui.Center).Children(func() {
+				ui.Row(c).Justify(ui.Center).AlignItems(ui.Center).Gap(10).Children(func() {
 					a.volumeSlider(c, white.Alpha(0.7), white.Alpha(0.18), 180)
+					a.lyricOffsetButton(c)
 				})
 			})
 
@@ -416,10 +417,13 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 		return
 	}
 	pos := pl.Position()
-	cur := lyrics.Index(lines, pos)
+	// Where the lyrics are, which is where playback is moved by the offset
+	// a listener set for this song: the music plays on, its words shifted.
+	lpos := pos + a.settings.lyricOffset(tr.ID)
+	cur := lyrics.Index(lines, lpos)
 	// Redraw as the next line begins.
 	if pl.Playing() && cur+1 < len(lines) {
-		c.After(lines[cur+1].At - pos + 20*time.Millisecond)
+		c.After(lines[cur+1].At - lpos + 20*time.Millisecond)
 	}
 	if a.lyricTrack != tr.ID {
 		a.lyricTrack, a.lyricAt = tr.ID, -2
@@ -434,7 +438,7 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 		scroll.Invisible()
 	}
 	defer a.quietCard(c, dim, h*0.18)
-	a.timedLines(c, scroll, lines, pos, cur, lag, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet}, nil)
+	a.timedLines(c, scroll, lines, lpos, cur, lag, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet}, nil)
 }
 
 // linesStyle is how timedLines sets its lines: the size, weight and
@@ -497,6 +501,9 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 							}
 						} else {
 							ui.Text(c, l.Text).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).TextColor(white)
+						}
+						if l.Romaji != "" {
+							ui.Text(c, l.Romaji).FontSize(15).TextColor(white.Alpha(0.55)).Italic()
 						}
 						if l.Translation != "" {
 							ui.Text(c, l.Translation).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.7))

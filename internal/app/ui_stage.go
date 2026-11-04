@@ -113,16 +113,15 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 		})
 		return
 	}
-	pos := pl.Position()
+	// Where the lyrics are, which is where playback is moved by the offset
+	// a listener set for this song: the music plays on, its words shifted.
+	pos := pl.Position() + a.settings.lyricOffset(tr.ID)
 	cur := lyrics.Index(lines, pos)
 	// Under a hot comment there is nothing to move: the quiet asks for
 	// the frame where it ends.
 	if pl.Playing() && !(quiet && dim > 0.98) {
-		// 倾诉 shows a part of a line a little before it is sung.
-		lead := 80 * time.Millisecond
-		if a.settings.StageStyle == "tilt" {
-			lead = tiltLead
-		}
+		// A style may show part of a line a little before it is sung.
+		lead := max(80*time.Millisecond, stageLead(a.settings.StageStyle))
 		stageNextFrame(c, lines, cur, pos, lead)
 	}
 
@@ -148,6 +147,9 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 
 			// The translation, and the line coming next, along the foot.
 			ui.Column(c).Absolute().Left(0).Right(0).Bottom(24).AlignItems(ui.Center).Gap(8).PassThrough().Children(func() {
+				if cur >= 0 && lines[cur].Romaji != "" {
+					ui.Text(c.Key("romaji"), lines[cur].Romaji).FontSize(15).TextColor(white.Alpha(0.5)).TextAlign(ui.Center).SingleLine()
+				}
 				if cur >= 0 && lines[cur].Translation != "" {
 					ui.Text(c.Key("translation"), lines[cur].Translation).FontSize(18).FontWeight(600).TextColor(white.Alpha(0.72)).TextAlign(ui.Center)
 				}
@@ -196,14 +198,14 @@ func stageNextFrame(c *ui.Context, lines []lyrics.Line, cur int, pos, lead time.
 // stageLine shows the words of l as they are at pos, the whole line at
 // opacity fade.
 func (a *app) stageLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, h, fade float32, accent ui.Color) {
-	switch a.settings.StageStyle {
-	case "partita":
-		a.partitaLine(c, l, pos, f, h, fade, accent)
-		return
-	case "tilt":
-		tiltLine(c, l, pos, w, fade, accent, a.settings.StageSparks)
-		return
-	}
+	style := stageStyleByID(a.settings.StageStyle)
+	style.draw(a, c, l, stageFrame{pos: pos, f: f, w: w, h: h, fade: fade, accent: accent})
+}
+
+// classicLine shows l as 流光 does: its words scattered a little about the
+// line, to one side or the middle, each springing in as it is sung.
+func (a *app) classicLine(c *ui.Context, l *lyrics.Line, at stageFrame) {
+	pos, f, w, h, fade, accent := at.pos, at.f, at.w, at.h, at.fade, at.accent
 	seed := float64(l.At / time.Millisecond)
 	shapes := stageShapes(c, l, f)
 	// Where the line sits: to one side or the middle, a little up or down.
