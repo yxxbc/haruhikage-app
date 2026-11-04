@@ -91,7 +91,8 @@ func spaceWords(shapes []wordShape, widths []float32, gap float32) {
 }
 
 // stage shows the lyrics of tr on the whole stage.
-func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
+func (a *app) stage(c *ui.Context, tr *netease.Track, accent, tint ui.Color) {
+	ink := lyricInk(tint)
 	pl := a.pl
 	lines, loaded := pl.Lyrics()
 	w, h := c.Size()
@@ -107,7 +108,7 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 					stageSkeleton(c, npShimmer(c), f, w)
 					return
 				}
-				ui.Text(c, "纯音乐，请欣赏").FontSize(28).FontWeight(800).TextColor(white.Alpha(0.4))
+				ui.Text(c, "纯音乐，请欣赏").FontSize(28).FontWeight(800).TextColor(ink.Alpha(0.4))
 			})
 			a.stageQuiet(c, dim, f, w)
 		})
@@ -132,7 +133,7 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 			if cur > 0 {
 				gone := float32((pos - lines[cur].At).Seconds()) / 0.4
 				if gone < 1 {
-					a.stageLine(c, &lines[cur-1], pos, f, w, h, 1-easeOutCubic(gone), accent)
+					a.stageLine(c, &lines[cur-1], pos, f, w, h, 1-easeOutCubic(gone), accent, ink)
 				}
 			}
 			switch {
@@ -142,19 +143,19 @@ func (a *app) stage(c *ui.Context, tr *netease.Track, accent ui.Color) {
 				// A long break before the next line.
 				a.interlude(c, pos, lines[cur].End, lines[cur+1].At)
 			default:
-				a.stageLine(c, &lines[cur], pos, f, w, h, 1, accent)
+				a.stageLine(c, &lines[cur], pos, f, w, h, 1, accent, ink)
 			}
 
 			// The translation, and the line coming next, along the foot.
 			ui.Column(c).Absolute().Left(0).Right(0).Bottom(24).AlignItems(ui.Center).Gap(8).PassThrough().Children(func() {
 				if cur >= 0 && lines[cur].Romaji != "" {
-					ui.Text(c.Key("romaji"), lines[cur].Romaji).FontSize(15).TextColor(white.Alpha(0.5)).TextAlign(ui.Center).SingleLine()
+					ui.Text(c.Key("romaji"), lines[cur].Romaji).FontSize(15).TextColor(ink.Alpha(0.5)).TextAlign(ui.Center).SingleLine()
 				}
 				if cur >= 0 && lines[cur].Translation != "" {
-					ui.Text(c.Key("translation"), lines[cur].Translation).FontSize(18).FontWeight(600).TextColor(white.Alpha(0.72)).TextAlign(ui.Center)
+					ui.Text(c.Key("translation"), lines[cur].Translation).FontSize(18).FontWeight(600).TextColor(ink.Alpha(0.72)).TextAlign(ui.Center)
 				}
 				if cur+1 < len(lines) {
-					ui.Text(c.Key("next"), lines[cur+1].Text).FontSize(14).TextColor(white.Alpha(0.32)).TextAlign(ui.Center).SingleLine()
+					ui.Text(c.Key("next"), lines[cur+1].Text).FontSize(14).TextColor(ink.Alpha(0.32)).TextAlign(ui.Center).SingleLine()
 				}
 			})
 		})
@@ -197,15 +198,15 @@ func stageNextFrame(c *ui.Context, lines []lyrics.Line, cur int, pos, lead time.
 
 // stageLine shows the words of l as they are at pos, the whole line at
 // opacity fade.
-func (a *app) stageLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, h, fade float32, accent ui.Color) {
+func (a *app) stageLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, h, fade float32, accent, ink ui.Color) {
 	style := stageStyleByID(a.settings.StageStyle)
-	style.draw(a, c, l, stageFrame{pos: pos, f: f, w: w, h: h, fade: fade, accent: accent})
+	style.draw(a, c, l, stageFrame{pos: pos, f: f, w: w, h: h, fade: fade, accent: accent, ink: ink})
 }
 
 // classicLine shows l as 流光 does: its words scattered a little about the
 // line, to one side or the middle, each springing in as it is sung.
 func (a *app) classicLine(c *ui.Context, l *lyrics.Line, at stageFrame) {
-	pos, f, w, h, fade, accent := at.pos, at.f, at.w, at.h, at.fade, at.accent
+	pos, f, w, h, fade, accent, ink := at.pos, at.f, at.w, at.h, at.fade, at.accent, at.ink
 	seed := float64(l.At / time.Millisecond)
 	shapes := stageShapes(c, l, f)
 	// Where the line sits: to one side or the middle, a little up or down.
@@ -216,14 +217,14 @@ func (a *app) classicLine(c *ui.Context, l *lyrics.Line, at stageFrame) {
 		Wrap().Justify(justify).AlignContent(ui.Center).AlignItems(ui.Center).Translate(0, lift).
 		Opacity(fade).PassThrough().Children(func() {
 		for i, word := range l.Words {
-			a.stageWord(c.Key(i), word, shapes[i], pos, f, accent)
+			a.stageWord(c.Key(i), word, shapes[i], pos, f, accent, ink)
 		}
 	})
 }
 
 // stageWord shows a word as it is at pos: waiting to be sung, being sung,
 // or sung.
-func (a *app) stageWord(c *ui.Context, word lyrics.Word, s wordShape, pos time.Duration, f float32, accent ui.Color) {
+func (a *app) stageWord(c *ui.Context, word lyrics.Word, s wordShape, pos time.Duration, f float32, accent ui.Color, ink ui.Color) {
 	const lookahead = 80 * time.Millisecond
 	start := word.Start - lookahead
 	end := max(word.End, word.Start+150*time.Millisecond)
@@ -235,7 +236,7 @@ func (a *app) stageWord(c *ui.Context, word lyrics.Word, s wordShape, pos time.D
 	x := s.x + float32(math.Sin(float64(s.y)))*100
 	y := s.y + float32(math.Cos(float64(s.x)))*50
 	scale, rotate, opacity, blur := float32(0.5), s.rotate+20, float32(0), float32(10)
-	color := white.Alpha(0.5)
+	color := ink.Alpha(0.5)
 	glow := float32(0)
 	if since > 0 {
 		// Sung: springing to its place, larger, sharp, filling with light.
@@ -244,7 +245,7 @@ func (a *app) stageWord(c *ui.Context, word lyrics.Word, s wordShape, pos time.D
 		scale, rotate = lerp(0.5, s.scale*1.4, e), lerp(s.rotate+20, s.rotate, e)
 		opacity = clamp01(since / 0.1)
 		blur = 10 * (1 - clamp01(since/0.2))
-		color = white.Alpha(lerp(0.5, 1, clamp01(since/singing)))
+		color = ink.Alpha(lerp(0.5, 1, clamp01(since/singing)))
 		glow = clamp01(since / max(0.08, 0.3*singing))
 	}
 	if after > 0 {
@@ -253,7 +254,7 @@ func (a *app) stageWord(c *ui.Context, word lyrics.Word, s wordShape, pos time.D
 		scale = lerp(s.scale*1.4, s.scale, q)
 		opacity = lerp(1, 0.82, q)
 		rotate = s.rotate + s.drift*clamp01(after/5)
-		color = white.Alpha(lerp(1, 0.5, easeOutCubic(after/0.8)))
+		color = ink.Alpha(lerp(1, 0.5, easeOutCubic(after/0.8)))
 		glow = 1 - clamp01(after/0.9)
 	}
 

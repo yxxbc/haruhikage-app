@@ -166,6 +166,15 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 			})
 		}
 		p.Image(bd.canvas.Bitmap(), r, ui.FillBox)
+		// A pale backdrop gets a wash where the words sit, so that the deep
+		// ink over it keeps ahead of what the cover is doing there.
+		if scrim, amount := backdropScrim(tint); amount > 0 {
+			p.FillGradient(r, ui.LinearGradient{Angle: 180, Stops: []ui.GradientStop{
+				{Color: scrim.Alpha(amount * 0.55), At: 0.30},
+				{Color: scrim.Alpha(amount), At: 0.55},
+				{Color: scrim.Alpha(amount * 0.8), At: 0.88},
+			}}, 0)
+		}
 		if bd.before != nil {
 			if k := float32(now.Sub(bd.fadeAt)) / float32(backdropFade); k < 1 {
 				// Eased out, as it fades.

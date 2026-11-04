@@ -96,11 +96,11 @@ func (a *app) nowPlayingView(c *ui.Context) {
 		a.backdrop(c, shown, tint)
 		// Over the backdrop, which is positioned too: positioned elements
 		// paint over those in the flow.
-		ui.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Children(func() { a.nowPlayingBody(c, tr, art, accent, w, h, pointerIn) })
+		ui.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Children(func() { a.nowPlayingBody(c, tr, art, accent, tint, w, h, pointerIn) })
 	})
 }
 
-func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, accent ui.Color, w, h float32, pointerIn bool) {
+func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, accent, tint ui.Color, w, h float32, pointerIn bool) {
 	pl := a.pl
 	a.commentsFor(tr)
 	// An episode has what it is about and its captions in place of lyrics;
@@ -141,7 +141,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				a.stageStyleButton(c)
 				a.paneTabs(c)
 			})
-			a.stage(c, tr, accent)
+			a.stage(c, tr, accent, tint)
 			a.stageBar(c, tr, art, accent)
 			return
 		}
@@ -219,7 +219,7 @@ func (a *app) nowPlayingBody(c *ui.Context, tr *netease.Track, art *artwork, acc
 				ui.Box(c).Height(a.npPaneTop)
 				switch a.npPane {
 				case paneLyrics:
-					a.lyricsPane(c, tr, h)
+					a.lyricsPane(c, tr, h, accent)
 				case paneComments:
 					a.commentsPane(c, tr)
 				case paneProgram:
@@ -396,7 +396,7 @@ func (a *app) paneTab(c *ui.Context, i int, label string) {
 	}
 }
 
-func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
+func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32, tint ui.Color) {
 	pl := a.pl
 	lines, loaded := pl.Lyrics()
 	if len(lines) == 0 {
@@ -438,7 +438,7 @@ func (a *app) lyricsPane(c *ui.Context, tr *netease.Track, h float32) {
 		scroll.Invisible()
 	}
 	defer a.quietCard(c, dim, h*0.18)
-	a.timedLines(c, scroll, lines, lpos, cur, lag, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet}, nil)
+	a.timedLines(c, scroll, lines, lpos, cur, lag, linesStyle{size: 30, weight: 800, lineHeight: 1.25, quiet: quiet, ink: lyricInk(tint)}, nil)
 }
 
 // linesStyle is how timedLines sets its lines: the size, weight and
@@ -448,6 +448,9 @@ type linesStyle struct {
 	weight     int
 	lineHeight float32
 	quiet      bool
+	// ink is what the words are set in: white over a dark backdrop, a deep
+	// shade over a light one, where white would be lost (lyricInk).
+	ink ui.Color
 }
 
 // timedLines fills scroll with lines that follow the track playing at
@@ -492,7 +495,7 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 							ui.RichText(c.Key("words")).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).Children(func() {
 								for wi, wd := range l.Words {
 									lit := clamp01(float32((pos - wd.Start).Seconds() / max(0.05, (wd.End-wd.Start).Seconds())))
-									ui.Text(c.Key(wi), wd.Text).TextColor(white.Alpha(0.38 + 0.62*lit))
+									ui.Text(c.Key(wi), wd.Text).TextColor(st.ink.Alpha(0.38 + 0.62*lit))
 								}
 							})
 							if pl.Playing() {
@@ -500,13 +503,13 @@ func (a *app) timedLines(c *ui.Context, scroll ui.Element, lines []lyrics.Line, 
 								c.After(40 * time.Millisecond)
 							}
 						} else {
-							ui.Text(c, l.Text).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).TextColor(white)
+							ui.Text(c, l.Text).FontSize(st.size).FontWeight(st.weight).LineHeight(st.lineHeight).LetterSpacing(-0.4).TextColor(st.ink)
 						}
 						if l.Romaji != "" {
-							ui.Text(c, l.Romaji).FontSize(15).TextColor(white.Alpha(0.55)).Italic()
+							ui.Text(c, l.Romaji).FontSize(15).TextColor(st.ink.Alpha(0.55)).Italic()
 						}
 						if l.Translation != "" {
-							ui.Text(c, l.Translation).FontSize(17).FontWeight(600).TextColor(white.Alpha(0.7))
+							ui.Text(c, l.Translation).FontSize(17).FontWeight(600).TextColor(st.ink.Alpha(0.7))
 						}
 					})
 				})

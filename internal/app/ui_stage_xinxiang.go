@@ -14,7 +14,7 @@ import (
 // along the line before it lifts, so the band brightens ahead of the voice.
 // Where 云阶 stacks a line in rows and 倾诉 breaks it large, 心象 keeps it
 // on one line and lets the light do the work.
-func (a *app) xinxiangLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, fade float32, accent ui.Color) {
+func (a *app) xinxiangLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, fade float32, accent, ink ui.Color) {
 	if len(l.Words) == 0 {
 		return
 	}
@@ -69,7 +69,7 @@ func (a *app) xinxiangLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, 
 					lift *= 1 - easeOutCubic(settle)
 				}
 				s.y = lift
-				a.stageWord(c.Key(i), word, s, pos, f, accent)
+				a.stageWord(c.Key(i), word, s, pos, f, accent, ink)
 			}
 		})
 	})
@@ -79,7 +79,7 @@ func (a *app) xinxiangLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, 
 // shift sideways with a chromatic split, settling into place as the first
 // word is due and breaking up again after the last. The slices move with
 // the song's pulse, so a line lands like a signal locking on.
-func (a *app) glitchLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, fade float32, accent ui.Color) {
+func (a *app) glitchLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w, fade float32, accent, ink ui.Color) {
 	if len(l.Words) == 0 {
 		return
 	}
@@ -129,7 +129,7 @@ func (a *app) glitchLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, w,
 			}
 		}).Children(func() {
 			for i, word := range l.Words {
-				a.stageWord(c.Key(i), word, shapes[i], pos, f, accent)
+				a.stageWord(c.Key(i), word, shapes[i], pos, f, accent, ink)
 			}
 		})
 	})

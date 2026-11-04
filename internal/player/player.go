@@ -40,6 +40,10 @@ type Player struct {
 	// EQ returns the listener's own gains, band by band, where they have
 	// moved a band from its preset: nil for the preset's curve.
 	EQ func() []float64
+	// autoGains is the curve measured for the song loading, for the
+	// equalizer's automatic setting: nil until a song has been measured,
+	// which plays flat rather than on another song's curve.
+	autoGains []float64
 	// Changed, if set, hears that what plays, where it is or whether it
 	// plays changed.
 	Changed func()
@@ -656,6 +660,14 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 			level = p.Quality()
 		}
 		info, s, err := p.open(t, level)
+		// The automatic curve is measured before the song plays: a curve
+		// that arrived a verse later would change the sound mid-song.
+		var auto []float64
+		if s != nil && err == nil && p.EQPreset() == "auto" && p.EQOn() {
+			if dl, _ := s.source(); dl != nil {
+				auto = analyzeAutoEQ(dl, t.Duration)
+			}
+		}
 		p.post(func() {
 			if gen != p.gen {
 				if s != nil {
@@ -687,6 +699,7 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 				return
 			}
 			p.stream, p.info = s, info
+			p.autoGains = auto
 			p.gain = normGain(info)
 			p.out = audio.NewPlayer(p.equalized(s))
 			// From its middle, as a session picked up again, it fades in.

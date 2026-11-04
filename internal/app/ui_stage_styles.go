@@ -41,6 +41,9 @@ type stageFrame struct {
 	w, h   float32 // the view's size
 	fade   float32 // the line's opacity, as it comes and goes
 	accent ui.Color
+	// ink is what the words are set in: white over a dark backdrop, a deep
+	// shade over a light one (lyricInk).
+	ink ui.Color
 }
 
 // stageStyles are the styles, the classic first: a settings file names one
@@ -55,7 +58,7 @@ var stageStyles = []stageStyle{
 		id:    "partita",
 		label: "云阶",
 		draw: func(a *app, c *ui.Context, l *lyrics.Line, at stageFrame) {
-			a.partitaLine(c, l, at.pos, at.f, at.h, at.fade, at.accent)
+			a.partitaLine(c, l, at.pos, at.f, at.h, at.fade, at.accent, at.ink)
 		},
 	},
 	{
@@ -70,14 +73,14 @@ var stageStyles = []stageStyle{
 		id:    "xinxiang",
 		label: "心象",
 		draw: func(a *app, c *ui.Context, l *lyrics.Line, at stageFrame) {
-			a.xinxiangLine(c, l, at.pos, at.f, at.w, at.fade, at.accent)
+			a.xinxiangLine(c, l, at.pos, at.f, at.w, at.fade, at.accent, at.ink)
 		},
 	},
 	{
 		id:    "glitch",
 		label: "故障",
 		draw: func(a *app, c *ui.Context, l *lyrics.Line, at stageFrame) {
-			a.glitchLine(c, l, at.pos, at.f, at.w, at.fade, at.accent)
+			a.glitchLine(c, l, at.pos, at.f, at.w, at.fade, at.accent, at.ink)
 		},
 	},
 }
@@ -232,7 +235,7 @@ func partitaRows(l *lyrics.Line, h float32) []partitaRow {
 // middle, each sliding in from the side of its guide as its first word is
 // due, the words in it springing in as classic's do. The whole line is at
 // opacity fade, swelling a little as it goes.
-func (a *app) partitaLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, h, fade float32, accent ui.Color) {
+func (a *app) partitaLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, h, fade float32, accent, ink ui.Color) {
 	const lookahead = 80 * time.Millisecond
 	rows := partitaRows(l, h)
 	if wordsLength(l.Words) > 40 {
@@ -302,7 +305,7 @@ func (a *app) partitaLine(c *ui.Context, l *lyrics.Line, pos time.Duration, f, h
 				}).
 				Children(func() {
 					for i, w := range words {
-						a.stageWord(c.Key(i), w, shapes[i], pos, f, accent)
+						a.stageWord(c.Key(i), w, shapes[i], pos, f, accent, ink)
 					}
 				})
 		}

@@ -30,6 +30,9 @@ type eqPreset struct {
 // chains: those add hiss, drive and bit crush, which live in its own audio
 // graph and not in a filter.
 var eqPresets = []eqPreset{
+	// 自动 has no curve of its own: it is measured from each song, so its
+	// gains are nil until a song has been.
+	{"auto", "自动", nil},
 	{"flat", "平直", []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
 	{"bass", "低音增强", []float64{6, 5, 3, 1, 0, -1, -1, 0, 1, 2}},
 	{"vocal", "人声", []float64{-2, -1, 0, 2, 4, 4, 3, 1, 0, -1}},
@@ -60,6 +63,11 @@ func (p *Player) eqGains() []float64 {
 		if g := p.EQ(); len(g) == len(eqFreqs) {
 			return clampGains(g)
 		}
+	}
+	if p.EQPreset() == "auto" {
+		// Measured for this song as it loaded; a song not yet measured
+		// plays flat, rather than on another song's curve.
+		return p.autoGains
 	}
 	return eqPresetByID(p.EQPreset()).gains
 }
@@ -105,7 +113,18 @@ func (p *Player) EQGains() []float64 {
 	if g := p.eqGains(); len(g) > 0 {
 		return g
 	}
-	return eqPresetByID(p.EQPreset()).gains
+	if p.EQPreset() == "auto" {
+		// Measured for this song, or flat before anything has been: a curve
+		// from another song is worse than none.
+		if p.autoGains != nil {
+			return p.autoGains
+		}
+		return eqPresets[1].gains
+	}
+	if g := eqPresetByID(p.EQPreset()).gains; g != nil {
+		return g
+	}
+	return eqPresets[1].gains
 }
 
 // eqNowPlayingGain is the gain the equalizer's curve takes from a track as

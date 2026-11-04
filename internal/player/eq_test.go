@@ -21,10 +21,16 @@ func TestEQPresets(t *testing.T) {
 		t.Fatalf("%d bands, %d labels", len(eqFreqs), len(eqBandLabels))
 	}
 	for _, p := range eqPresets {
+		if p.id == "auto" {
+			continue // measured per song, no curve to compare
+		}
 		w, ok := want[p.id]
 		if !ok {
 			t.Errorf("preset %q is not one of Folia's", p.id)
 			continue
+		}
+		if p.id == "auto" {
+			continue // measured per song, no curve of its own
 		}
 		if len(p.gains) != len(eqFreqs) {
 			t.Errorf("%q has %d gains, want %d", p.id, len(p.gains), len(eqFreqs))
@@ -38,13 +44,20 @@ func TestEQPresets(t *testing.T) {
 			t.Errorf("%q has no name to show", p.id)
 		}
 	}
-	// The flat curve is what an equalizer switched on but untouched is,
-	// and it must not lift anything.
-	if got := eqPresetByID("").id; got != "flat" {
-		t.Errorf("no preset reads as %q, not flat", got)
+	// A preset named by a settings file this version dropped falls back to
+	// the first in the list, which is 自动: it measures the song rather
+	// than guessing from a name it no longer knows.
+	if got := eqPresetByID("").id; got != "auto" {
+		t.Errorf("no preset reads as %q, not auto", got)
 	}
-	if got := eqPresetByID("dropped-later").id; got != "flat" {
+	if got := eqPresetByID("dropped-later").id; got != "auto" {
 		t.Errorf("a preset this version does not have reads as %q", got)
+	}
+	// 自动 carries no curve of its own: its gains come from the song.
+	for _, p := range eqPresets {
+		if p.id == "auto" && p.gains != nil {
+			t.Errorf("自动 ships a curve: %v", p.gains)
+		}
 	}
 }
 
