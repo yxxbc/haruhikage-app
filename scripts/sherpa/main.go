@@ -40,7 +40,7 @@ const version = "2.0.1"
 // release is the tag of the app's release the files are uploaded to.
 const release = "sherpa-onnx-" + version
 
-const repo = "yxxbc/haruhikage"
+const repo = "yxxbc/haruhikage-app"
 
 // An archive of sherpa-onnx's release, and the libraries the app takes
 // from it, the C API's first.
@@ -203,7 +203,7 @@ func fetch(url, sum string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	file := filepath.Join(cache, "haruhikage", "sherpa-onnx", sum, path.Base(url))
+	file := filepath.Join(cache, "haruhikage-app", "sherpa-onnx", sum, path.Base(url))
 	if digest(file) == sum {
 		return file, nil
 	}

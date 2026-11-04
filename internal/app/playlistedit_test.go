@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // editTestApp is signed in, with liked songs, two playlists of their own

@@ -5,8 +5,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/yxxbc/haruhikage/internal/netease"
-	"github.com/yxxbc/haruhikage/internal/player"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/player"
 )
 
 // Signed in, the listener finds what they played last, on their phone or

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yxxbc/haruhikage/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 func TestStreamLive(t *testing.T) {

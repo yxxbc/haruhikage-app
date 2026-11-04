@@ -11,7 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // wallApp is an app showing the wall of a queue of n songs, the at-th

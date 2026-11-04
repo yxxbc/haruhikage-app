@@ -6,8 +6,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage/internal/netease"
-	"github.com/yxxbc/haruhikage/internal/player"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/player"
 )
 
 // palette holds the app's colors, for the light and the dark appearance.

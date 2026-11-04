@@ -11,7 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // Clicking the account row drops its menu, which takes the focus so the

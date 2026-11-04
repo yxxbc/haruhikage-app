@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo/audio"
 
-	"github.com/yxxbc/haruhikage/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // The session is kept a while after playback changes and every while as

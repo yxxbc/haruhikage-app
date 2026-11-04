@@ -8,7 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"github.com/yxxbc/haruhikage/internal/player"
+	"github.com/yxxbc/haruhikage-app/internal/player"
 )
 
 // Where playback was left is kept in session.json in the user data

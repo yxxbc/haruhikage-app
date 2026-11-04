@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage/internal/lyrics"
+	"github.com/yxxbc/haruhikage-app/internal/lyrics"
 )
 
 // The stage sets its lyrics in one of the styles of Folia's visualizers

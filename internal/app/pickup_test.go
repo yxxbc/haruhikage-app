@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yxxbc/haruhikage/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // A login picks up the last stretch of listening on one device, oldest

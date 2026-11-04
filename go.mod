@@ -1,4 +1,4 @@
-module github.com/yxxbc/haruhikage
+module github.com/yxxbc/haruhikage-app
 
 go 1.27.3
 

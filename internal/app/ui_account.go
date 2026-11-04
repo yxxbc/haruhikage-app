@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"rsc.io/qr"
 
-	"github.com/yxxbc/haruhikage/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // loginState is a QR code login under way.

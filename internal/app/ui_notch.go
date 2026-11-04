@@ -7,8 +7,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage/internal/netease"
-	"github.com/yxxbc/haruhikage/internal/player"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/player"
 )
 
 // notch is the quick player around the camera housing at the top of the

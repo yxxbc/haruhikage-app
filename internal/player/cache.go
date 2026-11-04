@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yxxbc/haruhikage/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // Cache keeps the songs played on disk, so that they play again at once,

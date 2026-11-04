@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage/internal/player"
+	"github.com/yxxbc/haruhikage-app/internal/player"
 )
 
 // scrubState is a progress bar's own: the value dragged, while it is, and

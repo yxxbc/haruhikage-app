@@ -6,8 +6,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage/internal/lyrics"
-	"github.com/yxxbc/haruhikage/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/lyrics"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // quietApp is Now Playing a song sung from 20 s to 30 s, quiet before and

@@ -12,8 +12,8 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"github.com/yxxbc/haruhikage/internal/lyrics"
-	"github.com/yxxbc/haruhikage/internal/speech"
+	"github.com/yxxbc/haruhikage-app/internal/lyrics"
+	"github.com/yxxbc/haruhikage-app/internal/speech"
 )
 
 // An episode's captions are written down on the device, as it plays:

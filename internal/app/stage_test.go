@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yxxbc/haruhikage/internal/lyrics"
+	"github.com/yxxbc/haruhikage-app/internal/lyrics"
 )
 
 // Choosing a style from the stage's menu sets its lyrics in it, and

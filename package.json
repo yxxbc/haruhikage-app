@@ -1,5 +1,5 @@
 {
-  "name": "haruhikage",
+  "name": "haruhikage-app",
   "private": true,
   "workspaces": [
     "website"

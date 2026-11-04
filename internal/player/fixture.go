@@ -5,8 +5,8 @@ import (
 
 	"github.com/egoist/mygo/audio"
 
-	"github.com/yxxbc/haruhikage/internal/lyrics"
-	"github.com/yxxbc/haruhikage/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/lyrics"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // These set a player up as it would be after loading, without loading

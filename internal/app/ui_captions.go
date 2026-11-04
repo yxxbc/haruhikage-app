@@ -6,9 +6,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage/internal/lyrics"
-	"github.com/yxxbc/haruhikage/internal/netease"
-	"github.com/yxxbc/haruhikage/internal/speech"
+	"github.com/yxxbc/haruhikage-app/internal/lyrics"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/speech"
 )
 
 // captionsPane shows the episode playing's captions as lyrics show, in

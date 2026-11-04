@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/yxxbc/haruhikage/internal/app"
+	"github.com/yxxbc/haruhikage-app/internal/app"
 )
 
 func main() {

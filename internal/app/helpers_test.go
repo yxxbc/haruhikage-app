@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/yxxbc/haruhikage/internal/netease"
-	"github.com/yxxbc/haruhikage/internal/player"
+	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/player"
 )
 
 func newTestApp() *app {

@@ -43,7 +43,7 @@ Updates are signed with the key of `mygo keygen`, `keys/mygo-update.key` in the 
 6. Check the update feed shows the new version:
 
    ```bash
-   curl -sL https://github.com/yxxbc/haruhikage/releases/latest/download/update-darwin-arm64.json
+   curl -sL https://github.com/yxxbc/haruhikage-app/releases/latest/download/update-darwin-arm64.json
    ```
 
 7. Deploy the website. It reads the latest release when it's prerendered, so it has to be rebuilt after publishing:
@@ -52,7 +52,7 @@ Updates are signed with the key of `mygo keygen`, `keys/mygo-update.key` in the 
    cd website && bun run deploy
    ```
 
-   Then check https://haruhikage.yxxbc.workers.dev/download/ shows the new version.
+   Then check https://haruhikage-app.yxxbc.workers.dev/download/ shows the new version.
 
 ## The speech recognition libraries
 

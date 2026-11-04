@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "haruhikage",
+      "name": "haruhikage-app",
     },
     "website": {
       "name": "website",

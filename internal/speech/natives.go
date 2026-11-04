@@ -6,7 +6,7 @@ package speech
 const libVersion = "2.0.1"
 
 // libBase is where they download from: the assets of a release of the app.
-const libBase = "https://github.com/yxxbc/haruhikage/releases/download/sherpa-onnx-2.0.1/"
+const libBase = "https://github.com/yxxbc/haruhikage-app/releases/download/sherpa-onnx-2.0.1/"
 
 // libFiles are the libraries of each platform, the C API's first.
 var libFiles = map[string][]nativeFile{

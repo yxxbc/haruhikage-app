@@ -6,7 +6,7 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"github.com/yxxbc/haruhikage/internal/player"
+	"github.com/yxxbc/haruhikage-app/internal/player"
 )
 
 // newSongCache returns the cache of songs played, in the app's cache

@@ -1,4 +1,4 @@
-export const repo = 'https://github.com/yxxbc/haruhikage'
+export const repo = 'https://github.com/yxxbc/haruhikage-app'
 
 export type Asset = { name: string; size: number; browser_download_url: string }
 export type Release = { tag_name: string; published_at: string; assets: Asset[] }
