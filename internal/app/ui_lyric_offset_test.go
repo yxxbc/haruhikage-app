@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yxxbc/haruhikage-app/internal/lyrics"
+	"github.com/yxxbc/haruhikage-app/pkg/lyrics"
 )
 
 // An offset moves a song's lyrics against its music, and is kept by track:

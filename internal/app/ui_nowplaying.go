@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage-app/internal/lyrics"
+	"github.com/yxxbc/haruhikage-app/pkg/lyrics"
 	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 

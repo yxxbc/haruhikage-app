@@ -6,7 +6,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/yxxbc/haruhikage-app/internal/lyrics"
+	"github.com/yxxbc/haruhikage-app/pkg/lyrics"
 )
 
 // How long a caption's line is, in characters: it ends at a sentence's

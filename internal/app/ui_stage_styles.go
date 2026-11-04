@@ -9,7 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage-app/internal/lyrics"
+	"github.com/yxxbc/haruhikage-app/pkg/lyrics"
 )
 
 // A stageStyle is one way the stage sets its lyrics: Folia's visualizers
