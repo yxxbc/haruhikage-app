@@ -46,14 +46,6 @@ Updates are signed with the key of `mygo keygen`, `keys/mygo-update.key` in the 
    curl -sL https://github.com/yxxbc/haruhikage-app/releases/latest/download/update-darwin-arm64.json
    ```
 
-7. Deploy the website. It reads the latest release when it's prerendered, so it has to be rebuilt after publishing:
-
-   ```bash
-   cd website && bun run deploy
-   ```
-
-   Then check https://haruhikage-app.yxxbc.workers.dev/download/ shows the new version.
-
 ## The speech recognition libraries
 
 Podcast captions run sherpa-onnx, whose libraries the app downloads with the model from the `sherpa-onnx-<version>` release, not from the app's own. They only change with sherpa-onnx's version, in `scripts/sherpa`. Then pack them again, signing the macOS ones with the app's Developer ID (the app's hardened runtime loads no others), commit the `internal/speech/natives.go` it writes, and upload them as a prerelease, which never becomes the latest that updates look for:
