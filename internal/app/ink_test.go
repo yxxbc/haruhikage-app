@@ -51,3 +51,25 @@ func TestBackdropScrim(t *testing.T) {
 		t.Errorf("paler backdrop scrimmed less: %v against %v", paler, pale)
 	}
 }
+
+// A mid-bright cover keeps white words: a dusty pink takes white better
+// than a dark shade of itself, which over it is barely a shade at all.
+// Only a cover close to paper wants dark words.
+func TestLyricInkThreshold(t *testing.T) {
+	for _, c := range []struct {
+		rgb   [3]uint8
+		light bool
+		what  string
+	}{
+		{[3]uint8{207, 160, 165}, false, "a dusty pink"},
+		{[3]uint8{140, 100, 105}, false, "a mid pink"},
+		{[3]uint8{30, 34, 60}, false, "a dark cover"},
+		{[3]uint8{226, 224, 240}, true, "a pale violet"},
+		{[3]uint8{250, 250, 252}, true, "near paper"},
+	} {
+		col := ui.RGB(c.rgb[0], c.rgb[1], c.rgb[2])
+		if got := backdropIsLight(col); got != c.light {
+			t.Errorf("%s reads as light=%v, want %v (luminance %.3f)", c.what, got, c.light, luminance(col))
+		}
+	}
+}

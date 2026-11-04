@@ -5,3 +5,6 @@ mygo_windows_*.syso
 /node_modules/
 .DS_Store
 node_modules/
+
+# Notes kept on this machine only, not in the repository.
+/KNOWN-ISSUES.md

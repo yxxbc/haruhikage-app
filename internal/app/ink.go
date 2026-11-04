@@ -13,9 +13,15 @@ import (
 
 // backdropIsLight reports whether the backdrop of a cover of tint is light
 // enough that white would not read over it: the cover's own brightness,
-// weighted as the eye sees it, and lifted the way the backdrop lifts it.
+// weighted as the eye sees it.
+//
+// The line sits high, near white, and not at the middle: a mid-bright
+// cover — a dusty pink, a pale sand — takes white better than a dark
+// shade of its own hue, which over it is barely a shade at all. Only a
+// cover close to paper wants dark words, and only that light a one gets
+// them.
 func backdropIsLight(tint ui.Color) bool {
-	return luminance(tint) > 0.58
+	return luminance(tint) > 0.76
 }
 
 // luminance is how bright a color looks, as the eye weights the channels:

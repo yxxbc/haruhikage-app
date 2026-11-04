@@ -131,6 +131,13 @@ func (a *app) wallPane(c *ui.Context, tr *netease.Track, art *artwork, accent ui
 // the next.
 func (a *app) wallSong(c *ui.Context, tr *netease.Track, art *artwork, top, h float32) {
 	pl := a.pl
+	// The wall is the cover, so its words take the ink the backdrop takes:
+	// white over a dark one, a deep shade over paper. Before the cover
+	// arrives there is no tint to read, and the words stay white.
+	ink := white
+	if art != nil {
+		ink = lyricInk(art.tint)
+	}
 	ui.Row(c.Key("wall-song")).Absolute().Top(top).Left(0).Right(0).Height(h).Padding(0, 72).Gap(36).
 		Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 		// Not Now Playing's cover, which the pointer tilts and flings: here
@@ -147,16 +154,28 @@ func (a *app) wallSong(c *ui.Context, tr *netease.Track, art *artwork, top, h fl
 			cov.Background(white.Alpha(0.08))
 		}
 		cov.Children(func() { artImage(c, bitmap(art), 16, in) })
-		ui.Column(c).Width(440).Shrink(1).MinWidth(0).Gap(4).Children(func() {
+		// The song sits in a soft card of its own, so that its words are read
+		// against it rather than against the cover moving behind them: a
+		// backdrop that swirls makes a name over it look smudged, however
+		// well it contrasts.
+		textCard := ui.Column(c).Width(440).Shrink(1).MinWidth(0).Gap(4).Padding(16, 18).Radius(16)
+		// A dark wash over a light backdrop, a light one over a dark: the
+		// same ink the words take, inverted.
+		if luminance(ink) < 0.5 {
+			textCard.Background(white.Alpha(0.10))
+		} else {
+			textCard.Background(ui.RGBA(0, 0, 0, 0.18))
+		}
+		textCard.Children(func() {
 			if r := pl.Radio(); r != "" {
 				a.radioChip(c, r)
 			}
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, tr.Name).FontSize(26).FontWeight(800).LetterSpacing(-0.4).SingleLine().Shrink(1).MinWidth(0)
-				a.likeButton(c.Key("like"), tr, 20, white.Alpha(0.7))
-				a.songMenu(c.Key("more"), tr, 20, white.Alpha(0.7)).Margin(0, -8, 0, 0)
+				ui.Text(c, tr.Name).FontSize(26).FontWeight(800).LetterSpacing(-0.4).SingleLine().Shrink(1).MinWidth(0).TextColor(ink)
+				a.likeButton(c.Key("like"), tr, 20, ink.Alpha(0.7))
+				a.songMenu(c.Key("more"), tr, 20, ink.Alpha(0.7)).Margin(0, -8, 0, 0)
 			})
-			a.artistLinks(c, tr, white.Alpha(0.6), white, true).FontSize(14).SingleLine()
+			a.artistLinks(c, tr, ink.Alpha(0.6), ink, true).FontSize(14).SingleLine()
 			lines, _ := pl.Lyrics()
 			if len(lines) == 0 {
 				return
@@ -171,7 +190,7 @@ func (a *app) wallSong(c *ui.Context, tr *netease.Track, art *artwork, top, h fl
 			if cur >= 0 {
 				sung = lines[cur].Text
 			}
-			ui.Text(c, sung).FontSize(17).FontWeight(700).TextColor(white.Alpha(0.85)).MaxLines(2).Margin(14, 0, 0, 0)
+			ui.Text(c, sung).FontSize(17).FontWeight(700).TextColor(ink.Alpha(0.85)).MaxLines(2).Margin(14, 0, 0, 0)
 			if cur+1 < len(lines) {
 				ui.Text(c, lines[cur+1].Text).FontSize(14).FontWeight(600).TextColor(white.Alpha(0.38)).SingleLine()
 			}
