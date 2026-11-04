@@ -45,6 +45,13 @@ type settings struct {
 	// Normalize evens out the loudness of tracks, by what NetEase
 	// measured of each.
 	Normalize bool `json:"normalize"`
+	// Equalizer switches the ten bands on (equalizer): off is not a flat
+	// curve but no filter at all, which is the only way a switched off
+	// equalizer cannot colour the sound.
+	Equalizer bool `json:"equalizer,omitempty"`
+	// EQPreset is the curve chosen (eqPresets): empty for flat, which is
+	// what a settings file that never chose one means.
+	EQPreset string `json:"eqPreset,omitempty"`
 	// HotComments shows a song's hot comments in its quiet parts, in
 	// place of the lyrics (quietComment): the listener turns it on.
 	HotComments bool `json:"hotComments"`

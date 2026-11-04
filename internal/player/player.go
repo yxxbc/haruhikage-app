@@ -32,6 +32,14 @@ type Player struct {
 	Normalize func() bool
 	// Cache keeps the songs played, if set.
 	Cache *Cache
+	// Equalizer reports whether the equalizer is on, and Preset the curve
+	// chosen, as the settings say: both nil mean the sound is not touched,
+	// which is what an equalizer switched off must be, to the sample.
+	Equalizer func() bool
+	Preset    func() string
+	// EQ returns the listener's own gains, band by band, where they have
+	// moved a band from its preset: nil for the preset's curve.
+	EQ func() []float64
 	// Changed, if set, hears that what plays, where it is or whether it
 	// plays changed.
 	Changed func()
@@ -532,6 +540,12 @@ func (p *Player) applyGain() {
 	if p.Normalize != nil && p.Normalize() {
 		g *= p.gain
 	}
+	// The equalizer's curve takes its lift back out of the whole mix, so
+	// that choosing 低音增强 makes the bass deeper rather than everything
+	// louder: a preset that only cut leaves the volume as it was.
+	if p.EQOn() {
+		g *= eqNowPlayingGain(p.eqGains())
+	}
 	p.fade.setGain(g)
 }
 
@@ -674,7 +688,7 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 			}
 			p.stream, p.info = s, info
 			p.gain = normGain(info)
-			p.out = audio.NewPlayer(s)
+			p.out = audio.NewPlayer(p.equalized(s))
 			// From its middle, as a session picked up again, it fades in.
 			level := 1.0
 			if p.pending > 0 {

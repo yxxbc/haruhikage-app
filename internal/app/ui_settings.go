@@ -7,6 +7,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"github.com/yxxbc/haruhikage-app/internal/player"
 )
 
 // openSettings shows the settings window, opening it the first time.
@@ -151,6 +153,34 @@ func (a *app) settingsView(c *ui.Context) {
 				if ui.Switch(c.Key("normalize"), &s.Normalize).Label("音量均衡").Changed() {
 					a.pl.SetVolume(a.volume)
 					a.changed()
+				}
+			})
+			row("均衡器", "十段曲线，用来补足笔记本外放的低音或压低刺耳的高频；下一首开始生效", func() {
+				if ui.Switch(c.Key("equalizer"), &s.Equalizer).Label("均衡器").Changed() {
+					// The bands are made as the next song loads, so the
+					// sound playing is left as it is, as the quality is.
+					a.changed()
+					a.toast = "下一首开始生效"
+				}
+			})
+			row("均衡曲线", "选中后立即对正在播放的歌曲生效", func() {
+				presets := player.EQPresets()
+				labels := make([]string, len(presets))
+				chosen := presets[0].Label
+				for i, p := range presets {
+					labels[i] = p.Label
+					if p.ID == s.EQPreset {
+						chosen = p.Label
+					}
+				}
+				if ui.Select(c.Key("eq-preset"), &chosen, labels).Label("均衡曲线").Width(130).Disabled(!s.Equalizer).Changed() {
+					for _, p := range presets {
+						if p.Label == chosen {
+							s.EQPreset = p.ID
+						}
+					}
+					a.changed()
+					a.toast = "下一首开始生效"
 				}
 			})
 			row("睡眠定时", a.sleepDesc(), func() {
