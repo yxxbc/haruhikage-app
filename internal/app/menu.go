@@ -65,6 +65,8 @@ func (a *app) setMenu() {
 			{Label: "随机播放", Click: run(func() { a.pl.ToggleShuffle() })},
 			{Label: "切换循环模式", Click: run(func() { a.pl.CycleRepeat() })},
 			mygo.Separator(),
+			{Label: "睡眠定时", Submenu: a.sleepMenu(run)},
+			mygo.Separator(),
 			{Label: "正在播放", Accelerator: "CmdOrCtrl+L", Click: run(func() {
 				a.showMain()
 				a.nowPlaying = !a.nowPlaying && a.pl.Current() != nil

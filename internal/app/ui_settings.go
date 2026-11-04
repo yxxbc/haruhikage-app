@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"runtime"
 	"time"
 
@@ -150,6 +151,42 @@ func (a *app) settingsView(c *ui.Context) {
 				if ui.Switch(c.Key("normalize"), &s.Normalize).Label("音量均衡").Changed() {
 					a.pl.SetVolume(a.volume)
 					a.changed()
+				}
+			})
+			row("睡眠定时", a.sleepDesc(), func() {
+				labels := make([]string, 0, len(sleepChoices)+2)
+				chosen := ""
+				atEnd, left := a.pl.Sleeping()
+				for _, m := range sleepChoices {
+					label := fmt.Sprintf("%d 分钟", m)
+					labels = append(labels, label)
+					if !atEnd && left > 0 && left == m {
+						chosen = label
+					}
+				}
+				labels = append(labels, "播完当前歌曲后停止")
+				if atEnd {
+					chosen = "播完当前歌曲后停止"
+				}
+				labels = append(labels, "关闭")
+				if chosen == "" {
+					chosen = "关闭"
+				}
+				if ui.Select(c.Key("sleep"), &chosen, labels).Label("睡眠定时").Width(150).Changed() {
+					switch chosen {
+					case "关闭":
+						a.pl.CancelSleep()
+					case "播完当前歌曲后停止":
+						a.pl.SetSleepAtEnd()
+					default:
+						for _, m := range sleepChoices {
+							if chosen == fmt.Sprintf("%d 分钟", m) {
+								a.pl.SetSleep(time.Duration(m) * time.Minute)
+							}
+						}
+					}
+					a.setMenu()
+					a.redraw()
 				}
 			})
 		})

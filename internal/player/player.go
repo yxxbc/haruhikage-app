@@ -65,6 +65,9 @@ type Player struct {
 	lyrics       []lyrics.Line
 	lyricsLoaded bool
 
+	// sleep ends playback after a while, or with the track playing.
+	sleep sleep
+
 	// pending holds a seek asked for while the track loads.
 	pending time.Duration
 	// A seek playing fades out, then lands, then fades in: meanwhile the
@@ -133,6 +136,17 @@ func (p *Player) announce(t *netease.Track, artwork []byte) {
 }
 
 func (p *Player) ended() {
+	// A sleep set to stop with this track stops here, however it would
+	// have gone on: the listener asked for this to be the last.
+	if p.sleep.atEnd {
+		p.CancelSleep()
+		p.playing = false
+		if p.out != nil {
+			p.out.Pause()
+		}
+		p.sync()
+		return
+	}
 	if p.repeat == RepeatOne {
 		p.out.Seek(0)
 		p.out.Play()
@@ -417,6 +431,14 @@ func (p *Player) Jump(i int) {
 			return
 		}
 	}
+}
+
+// Pause pauses, fading out, playing or not.
+func (p *Player) Pause() {
+	if !p.playing {
+		return
+	}
+	p.TogglePlay()
 }
 
 // TogglePlay pauses, fading out, or plays, fading in.
