@@ -1,4 +1,5 @@
 # 春日影
+[![Listed on Awesome MyGo](https://awesomemygo.dev/badge.svg)](https://awesomemygo.dev/apps/haruhikage-app)
 
 用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的跨平台音乐播放器，原生界面，无 WebView。
 
