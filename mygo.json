@@ -2,7 +2,7 @@
   "name": "春日影",
   "identifier": "dev.yxxbc.haruhikage",
   "slug": "haruhikage-app",
-  "version": "0.1.24",
+  "version": "0.1.25",
   "out": "build",
   "updates": {
     "publicKey": "B2ClDpOtADuBgvwV3kBnQsQzOR5Cv6dSm3zWcZ/oTwM=",
