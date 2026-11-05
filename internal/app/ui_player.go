@@ -442,3 +442,37 @@ func (a *app) playerBar(c *ui.Context) {
 		})
 	})
 }
+
+// pickupPrompt asks, over the page, whether to go on with the last stretch
+// of listening another device left paused.
+func (a *app) pickupPrompt(c *ui.Context) {
+	if a.picked.id == 0 || a.picked.closed || a.nowPlaying {
+		return
+	}
+	tr := a.pl.Current()
+	if tr == nil || tr.ID != a.picked.id || a.pl.Playing() {
+		return
+	}
+	p := a.pal
+	card := ui.Column(c.Key("pickup")).Absolute().Top(topBar(c)+16).Right(24).Width(360).
+		Padding(14).Gap(12).Radius(16).Background(p.bg).Border(1, p.hairline).
+		Shadow(0, 18, 40, -10, p.cardShade)
+	card.Children(func() {
+		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+			a.cover(c, tr.Album.PicURL, 120, 48, 8)
+			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(3).Children(func() {
+				ui.Text(c, "继续上次播放").FontSize(11).FontWeight(700).TextColor(p.accent)
+				ui.Text(c, tr.Name).FontSize(14).FontWeight(600).SingleLine()
+				ui.Text(c, a.picked.heard).FontSize(11.5).TextColor(p.muted).SingleLine()
+			})
+			if iconButton(c.Key("pickup-close"), iconX, 16, p.faint, "忽略").Clicked() {
+				a.picked.closed = true
+			}
+		})
+		ui.Row(c).Children(func() {
+			if pillButton(c.Key("pickup-play"), iconPlay, "继续播放", p.accent, p.onAccent).Grow(1).Clicked() {
+				a.pl.TogglePlay()
+			}
+		})
+	})
+}

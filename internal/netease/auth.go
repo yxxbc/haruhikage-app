@@ -113,19 +113,105 @@ func ClearSession() {
 	deleteSession()
 }
 
+// VIPRight is one of the memberships a profile may have.
+type VIPRight struct {
+	VIPCode int    `json:"vipCode"`
+	Rights  bool   `json:"rights"`
+	IconURL string `json:"iconUrl"`
+}
+
+// VIPRights are the paid memberships of a profile. NetEase names the
+// highest one redplus, whose code 300 is SVIP; the associator is Black
+// Vinyl VIP, and a music package is an album of songs without the rest.
+type VIPRights struct {
+	RedPlus      *VIPRight `json:"redplus"`
+	Associator   *VIPRight `json:"associator"`
+	MusicPackage *VIPRight `json:"musicPackage"`
+	RedVipLevel  int       `json:"redVipLevel"`
+}
+
+// Membership is the best paid membership an account has.
+type Membership uint8
+
+const (
+	MembershipNone Membership = iota
+	MembershipMusicPackage
+	MembershipVIP
+	MembershipSVIP
+)
+
 type Profile struct {
 	UserID    int64  `json:"userId"`
 	Nickname  string `json:"nickname"`
 	AvatarURL string `json:"avatarUrl"`
+	// VIPType is the account's membership: 0 none, 10 a music package,
+	// 11 Black Vinyl VIP.
+	VIPType   int       `json:"vipType"`
+	VIPRights VIPRights `json:"vipRights"`
 }
+
+// Membership returns the best paid membership of the account.
+func (p *Profile) Membership() Membership {
+	if p == nil {
+		return MembershipNone
+	}
+	r := &p.VIPRights
+	if r.RedPlus != nil && r.RedPlus.Rights && r.RedPlus.VIPCode == 300 {
+		return MembershipSVIP
+	}
+	if r.Associator != nil && r.Associator.Rights {
+		return MembershipVIP
+	}
+	switch p.VIPType {
+	case 10:
+		return MembershipMusicPackage
+	case 11:
+		return MembershipVIP
+	}
+	if r.MusicPackage != nil && r.MusicPackage.Rights {
+		return MembershipMusicPackage
+	}
+	if p.VIPType > 0 {
+		return MembershipVIP
+	}
+	return MembershipNone
+}
+
+// VIP reports whether the account has a paid membership, of any kind.
+func (p *Profile) VIP() bool { return p.Membership() != MembershipNone }
 
 // Account returns the profile of who is signed in, or nil.
 func Account() (*Profile, error) {
 	var res struct {
+		Account *struct {
+			VIPType int `json:"vipType"`
+		} `json:"account"`
 		Profile *Profile `json:"profile"`
 	}
 	err := get("/api/nuser/account/get", nil, &res)
+	if res.Profile != nil && res.Account != nil {
+		res.Profile.VIPType = max(res.Profile.VIPType, res.Account.VIPType)
+	}
+	if err == nil && res.Profile != nil {
+		res.Profile.fillVIPRights()
+	}
 	return res.Profile, err
+}
+
+// fillVIPRights reads the memberships of a paid account: the account
+// endpoint only says that it is paid, while its own detail names SVIP.
+func (p *Profile) fillVIPRights() {
+	if p.VIPType == 0 || p.VIPRights.RedPlus != nil || p.VIPRights.Associator != nil {
+		return
+	}
+	var res struct {
+		Profile struct {
+			VIPRights VIPRights `json:"vipRights"`
+		} `json:"profile"`
+	}
+	if err := get("/api/v1/user/detail/"+strconv.FormatInt(p.UserID, 10), nil, &res); err == nil {
+		p.VIPRights = res.Profile.VIPRights
+	}
 }
 
 // QRKey starts a QR code login: the code shows LoginURL(key). The login

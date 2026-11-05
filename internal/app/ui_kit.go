@@ -58,6 +58,23 @@ func paletteFor(t *ui.Theme) palette {
 	}
 }
 
+// accountBadge marks a profile with its paid membership, if it has one.
+func accountBadge(c *ui.Context, p palette, prof *netease.Profile) {
+	m := prof.Membership()
+	if m == netease.MembershipNone {
+		return
+	}
+	label, bg, fg := "VIP", p.accent, p.onAccent
+	switch m {
+	case netease.MembershipSVIP:
+		label, bg, fg = "SVIP", ui.Oklch(0.82, 0.13, 85), ui.Hex("#2b1d00")
+	case netease.MembershipMusicPackage:
+		label, bg, fg = "音乐包", p.hover, p.muted
+	}
+	ui.Text(c, label).FontSize(9).FontWeight(800).LetterSpacing(0.3).
+		TextColor(fg).Padding(1, 5).Radius(999).Background(bg)
+}
+
 // iconButton is a borderless button showing an icon, which a soft circle
 // marks under the pointer and which gives a little as it is pressed.
 func iconButton(c *ui.Context, icon *ui.SVG, size float32, color ui.Color, label string) ui.Element {

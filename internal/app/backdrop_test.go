@@ -53,6 +53,19 @@ func TestBackdropDrifts(t *testing.T) {
 	}
 }
 
+// 隐现 paints with its patches and without them, the colors flowing
+// either way.
+func TestLatentBackdropPaints(t *testing.T) {
+	for _, patches := range []bool{true, false} {
+		tt := ui.NewTester(func(c *ui.Context) {
+			ui.Box(c).Fill().Draw(func(p *ui.Painter, r ui.Rect) {
+				drawLatent(p, r, ui.Oklch(0.6, 0.2, 22), 5, 0.9, 0.8, patches)
+			})
+		}, 64, 64)
+		tt.Frame()
+	}
+}
+
 // With NM_FRAMES set, saves the fog of a few covers as it drifts,
 // and on a beat, one row a cover.
 func TestBackdropDriftFrames(t *testing.T) {

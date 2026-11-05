@@ -60,6 +60,7 @@ func (a *app) view(c *ui.Context) {
 				// positioned, they paint over it.
 				a.pageTop(c)
 				a.playerBar(c)
+				a.pickupPrompt(c)
 			})
 		})
 		a.nowPlayingLayer(c, npOpen, npSettled)
@@ -121,6 +122,8 @@ func (a *app) load(r route) {
 	switch r.page {
 	case pageHome:
 		a.freshenHome()
+	case pageRecent:
+		a.loadRecent()
 	case pagePlaylist:
 		a.loadPlaylist(r.id, false)
 	case pageSearch:
@@ -182,6 +185,7 @@ func (a *app) sidebar(c *ui.Context) {
 		ui.Scroll(c.Key("nav")).TrackScroll(&a.navScroll).Grow(1).Margin(0, -6).Padding(0, 6).Gap(4).Children(func() {
 			a.navItem(c, iconHome, "为你推荐", route{page: pageHome})
 			a.navItem(c, iconDaily, "每日推荐", route{page: pageDaily})
+			a.navItem(c, iconHistory, "最近播放", route{page: pageRecent})
 			a.navItem(c, iconRadio, "私人 FM", route{page: pageFM})
 			a.navItem(c, iconCharts, "排行榜", route{page: pageCharts})
 			a.navItem(c, iconPodcast, "播客", route{page: pagePodcasts})
@@ -353,6 +357,8 @@ func (a *app) content(c *ui.Context) {
 		a.homePage(c)
 	case pageDaily:
 		a.dailyPage(c)
+	case pageRecent:
+		a.recentPage(c)
 	case pageCharts:
 		a.chartsPage(c)
 	case pagePlaylist:

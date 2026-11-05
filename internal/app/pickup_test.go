@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
@@ -45,5 +47,27 @@ func TestLastStretch(t *testing.T) {
 	}
 	if _, _, ok := lastStretch([]netease.Play{play(1, 8*24*time.Hour, "iphone", 0)}, now); ok {
 		t.Error("picked up a week-old song")
+	}
+}
+
+// 忽略 on the pickup card puts it away without starting what another
+// device left paused.
+func TestPickupCardDismissed(t *testing.T) {
+	a := newTestApp()
+	a.settings = defaultSettings()
+	a.route = route{page: pageRecent}
+	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
+	a.picked = pickedUp{id: 7, heard: "3分钟前在手机上听过"}
+	tt := ui.NewTester(a.view, 1200, 800)
+	tt.Frame()
+	if err := tt.Click("忽略"); err != nil {
+		t.Fatal(err)
+	}
+	if !a.picked.closed {
+		t.Fatal("the card stayed")
+	}
+	tt.Frame()
+	if tt.HasText("继续上次播放") {
+		t.Error("the card shows after being put away")
 	}
 }

@@ -9,8 +9,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/audio"
 
-	"github.com/yxxbc/haruhikage-app/pkg/lyrics"
 	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/pkg/lyrics"
 )
 
 type RepeatMode int
@@ -462,7 +462,7 @@ func (p *Player) TogglePlay() {
 			p.playing = !p.playing
 			p.sync()
 		case len(p.order) > 0:
-			p.loadSkipping(max(p.at, 0), 0, true, p.pending)
+			p.loadAt(max(p.at, 0), true, p.pending)
 		}
 		return
 	}
@@ -609,14 +609,13 @@ func (p *Player) stop() {
 	p.fade.attach(nil, 1)
 }
 
-// load plays the track at order[at], skipping those that cannot play.
+// load plays the track at order[at].
 func (p *Player) load(at int) {
-	p.loadSkipping(at, 0, true, 0)
+	p.loadAt(at, true, 0)
 }
 
-// loadSkipping loads the track at order[at], to play or not, from from,
-// skipping those that cannot play: skipped of them so far.
-func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
+// loadAt loads the track at order[at], to play or not, from from.
+func (p *Player) loadAt(at int, play bool, from time.Duration) {
 	p.stop()
 	p.gen++
 	gen := p.gen
@@ -678,24 +677,14 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 			p.loading = false
 			if err != nil {
 				p.err = err.Error()
-				switch {
-				case err != netease.ErrUnavailable:
-				case t.ProgramID != 0:
-					p.err = "这期节目需要购买才能收听"
-				default:
-					p.err = "这首歌需要 VIP 才能播放"
-				}
-				// Skip what cannot play, unless nothing in the queue can.
-				if skipped+1 < len(p.order) {
-					next := at + 1
-					if next >= len(p.order) {
-						next = 0
+				if errors.Is(err, netease.ErrUnavailable) {
+					p.err = "这首歌暂时无法播放"
+					if t.ProgramID != 0 {
+						p.err = "这期节目需要购买才能收听"
 					}
-					p.loadSkipping(next, skipped+1, p.playing, 0)
-				} else {
-					p.playing = false
-					p.sync()
 				}
+				p.playing = false
+				p.sync()
 				return
 			}
 			p.stream, p.info = s, info
@@ -729,13 +718,39 @@ func (p *Player) loadSkipping(at, skipped int, play bool, from time.Duration) {
 	}()
 }
 
+// streamURL returns where a track streams; tests replace it.
+var streamURL = netease.SongURL
+
+// fetchStream returns the stream of id at level, or the best lower level
+// it may play: a cover may have no high-quality file, and stopping on the
+// first level the server has nothing for would leave it unplayed.
+func (p *Player) fetchStream(id int64, level string) (*netease.Stream, error) {
+	at := len(netease.Levels) - 1
+	for i, lv := range netease.Levels {
+		if lv == level {
+			at = i
+			break
+		}
+	}
+	for ; at >= 0; at-- {
+		st, err := streamURL(id, netease.Levels[at])
+		if err == nil {
+			return st, nil
+		}
+		if !errors.Is(err, netease.ErrUnavailable) {
+			return nil, err
+		}
+	}
+	return nil, netease.ErrUnavailable
+}
+
 // open opens track t's audio at level: kept in the cache, or else
 // streamed into it, and kept once it has all come in.
 func (p *Player) open(t netease.Track, level string) (*netease.Stream, stream, error) {
 	dl, info, ok := p.Cache.lookup(t.ID, level)
 	if !ok {
 		var err error
-		info, err = netease.SongURL(t.ID, level)
+		info, err = p.fetchStream(t.ID, level)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -792,5 +807,5 @@ func (p *Player) Restore(s Session) {
 	}
 	p.queue, p.order = s.Queue, s.Order
 	p.shuffle, p.repeat = s.Shuffle, s.Repeat%3
-	p.loadSkipping(s.At, 0, false, time.Duration(s.Position)*time.Millisecond)
+	p.loadAt(s.At, false, time.Duration(s.Position)*time.Millisecond)
 }

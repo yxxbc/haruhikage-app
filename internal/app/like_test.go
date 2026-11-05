@@ -442,9 +442,13 @@ func TestSegmentedFrames(t *testing.T) {
 		a := newTestApp()
 		a.settings = defaultSettings()
 		a.settings.Appearance = "light"
-		tt := ui.NewTester(a.settingsView, 560, 640)
+		tt := ui.NewTester(a.settingsView, 760, 640)
 		tt.SetScale(2)
 		tt.SetDark(dark)
+		tt.Frame()
+		if err := tt.Click("外观"); err != nil {
+			t.Fatal(err)
+		}
 		tt.Frame()
 		r, ok := tt.Find("跟随系统")
 		if !ok {

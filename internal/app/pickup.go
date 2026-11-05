@@ -11,15 +11,16 @@ import (
 
 // Signed in, the listener finds what they played last, on their phone or
 // wherever, waiting in the player: paused, with where they heard it under
-// its title.
+// its title, and a card over the page asking whether to go on.
 
 // recentPlays returns the listener's recent plays; tests replace it.
 var recentPlays = netease.RecentPlays
 
 // pickedUp is the song a login picked up, while it waits to play.
 type pickedUp struct {
-	id    int64
-	heard string // where and when, as "12分钟前在手机上听过"
+	id     int64
+	heard  string // where and when, as "12分钟前在手机上听过"
+	closed bool   // the card asking to go on was put away
 }
 
 // pickUp queues the songs the listener played last, paused, if nothing is
@@ -41,11 +42,6 @@ func (a *app) pickUp(uid int64) {
 			}
 			a.pl.Restore(player.Session{Queue: songs, Order: order, At: len(songs) - 1})
 			a.picked = pickedUp{id: last.Track.ID, heard: heardAt(last, time.Now())}
-			where := "上次"
-			if d := deviceName(last.Device); d != "" {
-				where = "在" + d + "上"
-			}
-			a.toast = "已接上你" + where + "听的《" + last.Track.Name + "》，按空格键继续"
 		})
 	}()
 }

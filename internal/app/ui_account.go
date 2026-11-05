@@ -52,6 +52,7 @@ func (a *app) signedIn(prof *netease.Profile) {
 	a.restoreSession()
 	a.mine, a.saved, a.recPlaylists, a.liked = nil, nil, nil, nil
 	a.likedPrograms, a.askedPrograms = nil, nil
+	a.recent, a.recentErr, a.recentLoading = nil, "", false
 	// What the listener may play, and follows, changed: load the pages
 	// again.
 	a.playlists = map[int64]*netease.Playlist{}
@@ -66,6 +67,9 @@ func (a *app) signedIn(prof *netease.Profile) {
 	}
 	a.loadLiked(prof.UserID)
 	a.loadMine(prof.UserID)
+	// With nothing of this device's own to go on with, what another device
+	// left paused is waiting.
+	a.pickUp(prof.UserID)
 }
 
 func (a *app) openLogin() {
@@ -116,9 +120,6 @@ func (a *app) pollLogin(gen int, key string) {
 				case code == netease.QRConfirmed:
 					l.status, l.finished = code, true
 					a.signedIn(prof)
-					if prof != nil {
-						a.pickUp(prof.UserID)
-					}
 					a.closeLoginSoon(gen)
 				case code == netease.QRExpired || code == netease.QRWaiting || code == netease.QRScanned:
 					l.status = code
@@ -167,14 +168,14 @@ func (a *app) loginDialog(c *ui.Context) {
 		panel.Width(340).Padding(28, 28, 26, 28).Radius(22).Gap(6).AlignItems(ui.Center).
 			Background(p.bg).Border(1, p.hairline).Shadow(0, 24, 60, -12, ui.RGBA(0, 0, 0, 0.4)).
 			Transition(ui.ElementTransition{Animation: &ui.Snappy, Enter: &ui.Motion{Scale: 0.94}, Exit: &ui.Motion{Scale: 0.96}})
-		title, sub := "扫码登录", "打开手机 App，扫一扫登录"
+		title, sub := "扫码登录", "打开网易云音乐 App，扫一扫登录"
 		switch {
 		case l.finished:
 			title, sub = "登录成功", "欢迎回来，"+a.profileName()
 		case l.err != "":
 			sub = l.err
 		case l.status == netease.QRScanned:
-			title, sub = "扫描成功", "请在手机上确认登录"
+			title, sub = "扫描成功", "请在网易云音乐 App 上确认登录"
 		case l.status == netease.QRExpired:
 			sub = "二维码已失效"
 		}
@@ -268,6 +269,7 @@ func (a *app) accountRow(c *ui.Context) {
 	b.Label(prof.Nickname).Expanded(a.accountOpen).Children(func() {
 		a.avatar(c, prof.AvatarURL, 26, p.press)
 		ui.Text(c, prof.Nickname).FontSize(13).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+		accountBadge(c, p, prof)
 		ui.Icon(c, iconUpDown).Size(13, 13).TextColor(p.faint)
 	})
 	if b.Clicked() {

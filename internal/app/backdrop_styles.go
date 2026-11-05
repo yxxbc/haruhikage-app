@@ -16,6 +16,14 @@ import (
 // choose it, the cache that paints it and the tests that budget its frames
 // all ask here, so a backdrop added below needs nothing else changed.
 
+// backdropLook is what a moving backdrop paints with: its own time, the
+// music's bass and level, from 0 to 1, and whether it draws the dark
+// patches that swell with them.
+type backdropLook struct {
+	drift, bass, level float32
+	patches            bool
+}
+
 // A backdropStyle paints the backdrop of the song playing.
 type backdropStyle struct {
 	// id is what the settings keep; "" is the still one, which a settings
@@ -27,9 +35,8 @@ type backdropStyle struct {
 	// it does, the frame is asked for again, and it is painted on the GPU
 	// alone, where one runs. A still backdrop is painted once a song.
 	moves bool
-	// draw paints the backdrop of a cover of tint into r: at seconds of
-	// its own drift, the music's bass and its level, from 0 to 1.
-	draw func(p *ui.Painter, r ui.Rect, art *artwork, tint ui.Color, drift, bass, level float32)
+	// draw paints the backdrop of a cover of tint into r, with look.
+	draw func(p *ui.Painter, r ui.Rect, art *artwork, tint ui.Color, look backdropLook)
 }
 
 // backdropStyles are the backdrops: the still one first, which a settings
@@ -38,7 +45,7 @@ var backdropStyles = []backdropStyle{
 	{
 		id:    "",
 		label: "静态",
-		draw: func(p *ui.Painter, r ui.Rect, art *artwork, tint ui.Color, _, _, _ float32) {
+		draw: func(p *ui.Painter, r ui.Rect, art *artwork, tint ui.Color, _ backdropLook) {
 			drawBackdrop(p, r, art, tint)
 		},
 	},
@@ -46,16 +53,16 @@ var backdropStyles = []backdropStyle{
 		id:    "fog",
 		label: "迷雾",
 		moves: true,
-		draw: func(p *ui.Painter, r ui.Rect, art *artwork, tint ui.Color, drift, bass, _ float32) {
-			drawFog(p, r, tint, drift, bass)
+		draw: func(p *ui.Painter, r ui.Rect, art *artwork, tint ui.Color, look backdropLook) {
+			drawFog(p, r, tint, look.drift, look.bass)
 		},
 	},
 	{
 		id:    "latent",
 		label: "隐现",
 		moves: true,
-		draw: func(p *ui.Painter, r ui.Rect, art *artwork, tint ui.Color, drift, bass, level float32) {
-			drawLatent(p, r, tint, drift, bass, level)
+		draw: func(p *ui.Painter, r ui.Rect, art *artwork, tint ui.Color, look backdropLook) {
+			drawLatent(p, r, tint, look.drift, look.bass, look.level, look.patches)
 		},
 	},
 }
@@ -92,6 +99,7 @@ var B vec4
 var C vec4
 var D vec4
 var Back vec4
+var Patches float
 
 func hash(p vec2) float {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453)
@@ -152,14 +160,23 @@ func bayer4(x int, y int) float {
 	return m[(y%4)*4+(x%4)] / 16.0
 }
 
-func Fragment(dst vec4, pos vec2) vec4 {
-	size := rectSize()
-	uv := pos / size
-	f := fluid(uv, Time)
+func shade(pos vec2, uv vec2) vec3 {
+	if Patches < 0.5 {
+		// Without the patches, the colors as a wash that turns slowly: no
+		// shade cuts it into shapes, and only the light of a beat lifts it.
+		a := 0.5 + 0.5*sin((uv.x*1.1+uv.y*0.7)*3.2 + Time*0.09)
+		b := 0.5 + 0.5*cos((uv.y-uv.x*0.5)*2.6 - Time*0.06)
+		c := mix(D.rgb, A.rgb, 0.22+0.68*a)
+		c = mix(c, B.rgb, 0.15+0.55*b)
+		c = mix(c, C.rgb, 0.10+0.45*a*b)
+		return mix(Back.rgb, c, 0.78) * (1.0 + 0.10*Bass)
+	}
+
 	// The colors pool where the field is high and leave deep shade where
 	// it is low, so the picture has shapes rather than an average. The
 	// shade follows the whole field, not one band of it, or it would sit
 	// in the same place however the fluid turned.
+	f := fluid(uv, Time)
 	c := mix(D.rgb, A.rgb, smoothstep(0.20, 0.66, f))
 	c = mix(c, B.rgb, smoothstep(0.50, 0.90, f)*0.8)
 	c = mix(c, C.rgb, smoothstep(0.26, 0.46, f)*smoothstep(0.62, 0.44, f)*0.5)
@@ -180,7 +197,7 @@ func Fragment(dst vec4, pos vec2) vec4 {
 	// whether the canvas is a retina buffer or a small one, and does not
 	// grow into tiles when the backdrop is painted at another size.
 	flow := vec2(fbm(uv*7.0+vec2(Time*0.05, 0)), fbm(uv*7.0+vec2(3.3, Time*0.04)))
-	cell := size.y / 300.0
+	cell := rectSize().y / 300.0
 	gx := int((pos.x+flow.x*60.0) / cell)
 	gy := int((pos.y+flow.y*60.0) / cell)
 	th := bayer4(gx, gy)
@@ -188,7 +205,13 @@ func Fragment(dst vec4, pos vec2) vec4 {
 	sl := c + (2.0*dither-1.0)*(sqrt(max(c, vec3(0.0)))-c)
 
 	// At Folia's ditheringOpacity, over the whole field.
-	out := mix(c, sl, 0.55+(0.10*Level))
+	return mix(c, sl, 0.55+(0.10*Level))
+}
+
+func Fragment(dst vec4, pos vec2) vec4 {
+	size := rectSize()
+	uv := pos / size
+	out := shade(pos, uv)
 	out *= 1.04 - 0.30*smoothstep(0.55, 1.0, uv.y)
 	return vec4(out, 1)
 }
@@ -198,14 +221,18 @@ var latentShader = sync.OnceValue(func() *shader.Shader { return shader.MustComp
 
 // drawLatent paints 隐现 of tint in r at drift seconds, lit by bass and
 // level, both from 0 to 1: the cover's four colors as a fluid mesh, with a
-// fine dither of light over it.
-func drawLatent(p *ui.Painter, r ui.Rect, tint ui.Color, drift, bass, level float32) {
+// fine dither of light over it. Without patches, the mesh is a wash.
+func drawLatent(p *ui.Painter, r ui.Rect, tint ui.Color, drift, bass, level float32, patches bool) {
 	a, b, c, d, back := latentColors(tint)
+	grain := float32(0)
+	if patches {
+		grain = 1
+	}
 	// The dither crawls at its own pace, a third of the mesh's: Folia's
 	// ditheringSpeed 0.1 against its meshSpeed 0.3.
 	latentShader().Draw(p, r, shader.Options{Uniforms: map[string]any{
 		"Time": drift * 0.3, "DitherTime": drift * 0.1,
-		"Bass": min(bass, 1), "Level": min(level, 1),
+		"Bass": min(bass, 1), "Level": min(level, 1), "Patches": grain,
 		"A": a, "B": b, "C": c, "D": d, "Back": back,
 	}})
 }

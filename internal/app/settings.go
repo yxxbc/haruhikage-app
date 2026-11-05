@@ -60,6 +60,10 @@ type settings struct {
 	// mean, "fog" its fog, "latent" the fluid mesh. The old Fog setting is
 	// read into it once, by migrateFog.
 	Backdrop string `json:"backdrop,omitempty"`
+	// BackdropPatches draws the dark shapes of the fluid mesh, and the
+	// dither over them, as the music swells; off leaves its colors flowing
+	// smoothly.
+	BackdropPatches bool `json:"backdropPatches"`
 	// Fog is what the backdrop used to be chosen by: true for the fog, and
 	// nothing else. Kept so that a settings file of that time goes on
 	// showing the fog it chose.
@@ -91,7 +95,7 @@ func defaultSettings() settings {
 	// A new listener gets 隐现 as the backdrop and the equalizer on its
 	// automatic curve: both read well out of the box and cost nothing to
 	// try, which is not true of a fog that runs the GPU all night.
-	return settings{NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true, AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, Backdrop: "latent", Equalizer: true, EQPreset: "auto"}
+	return settings{NotchActivity: true, Quality: "exhigh", Appearance: "system", Volume: 0.8, Normalize: true, AppIcon: "dock-and-menubar", CacheMB: 2048, Captions: true, Backdrop: "latent", BackdropPatches: true, Equalizer: true, EQPreset: "auto"}
 }
 
 func settingsPath() (string, error) {

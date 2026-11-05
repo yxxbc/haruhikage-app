@@ -109,17 +109,18 @@ const backdropFade = 700 * time.Millisecond
 // backdropCache is the backdrop as last painted, and where the fog's
 // drift and its pulse are.
 type backdropCache struct {
-	canvas *ui.Canvas
-	before *ui.Canvas // the song before's, fading out over it
-	fadeAt time.Time  // when it began to
-	art    *artwork
-	tint   ui.Color
-	fog    bool
-	at     time.Time // when it was painted
-	drift  float64   // the clouds' time, in seconds, which stops on pause
-	speed  float64   // how fast drift goes: 1 playing, 0 paused
-	level  barState
-	last   time.Time
+	canvas  *ui.Canvas
+	before  *ui.Canvas // the song before's, fading out over it
+	fadeAt  time.Time  // when it began to
+	art     *artwork
+	tint    ui.Color
+	fog     bool
+	patches bool
+	at      time.Time // when it was painted
+	drift   float64   // the clouds' time, in seconds, which stops on pause
+	speed   float64   // how fast drift goes: 1 playing, 0 paused
+	level   barState
+	last    time.Time
 }
 
 // backdrop paints the backdrop behind Now Playing, still or fog.
@@ -153,16 +154,18 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 		lv, live := pl.Levels()
 		moved := bd.step(now, pl.Playing() && moving, lv, live && moving)
 		due := now.Sub(bd.at) >= backdropFrame-2*time.Millisecond
-		if bd.canvas == nil || bd.art != art || bd.tint != tint || bd.fog != fog || moved && due {
+		if bd.canvas == nil || bd.art != art || bd.tint != tint || bd.fog != fog ||
+			bd.patches != a.settings.BackdropPatches || moved && due {
 			if bd.canvas == nil {
 				bd.canvas = ui.NewCanvas(cw, ch)
 			}
-			bd.art, bd.tint, bd.fog, bd.at = art, tint, fog, now
+			bd.art, bd.tint, bd.fog, bd.patches, bd.at = art, tint, fog, a.settings.BackdropPatches, now
 			bass := bd.level.group(0, 6)
 			level := bd.level.group(0, player.Bands)
 			bd.canvas.Draw(p, func(cp *ui.Painter) {
 				box := ui.Rect{W: float32(cw), H: float32(ch)}
-				style.draw(cp, box, art, tint, float32(bd.drift), bass, level)
+				look := backdropLook{drift: float32(bd.drift), bass: bass, level: level, patches: a.settings.BackdropPatches}
+				style.draw(cp, box, art, tint, look)
 			})
 		}
 		p.Image(bd.canvas.Bitmap(), r, ui.FillBox)

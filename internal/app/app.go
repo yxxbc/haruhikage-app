@@ -16,6 +16,7 @@ type pageKind int
 const (
 	pageHome pageKind = iota
 	pageDaily
+	pageRecent
 	pageCharts
 	pagePlaylist
 	pageSearch
@@ -73,6 +74,10 @@ type app struct {
 	homeErr     string
 	homeLoading bool
 	homeAt      time.Time // when what the home page shows was asked for
+
+	recent        []netease.Play // the plays the recent page lists
+	recentErr     string
+	recentLoading bool
 
 	playlists  map[int64]*netease.Playlist
 	loadingPl  map[int64]bool
@@ -138,6 +143,7 @@ type app struct {
 	quitting              bool
 
 	settings    settings
+	settingsTab settingsSection // the settings window's category chosen
 	settingsWin *mygo.Window
 	cacheUsed   int64 // the bytes the song cache takes, -1 until measured
 	updates     bool  // the update plugin is used (useUpdater)

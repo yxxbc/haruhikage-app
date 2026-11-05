@@ -188,7 +188,7 @@ func TestBackdropStyles(t *testing.T) {
 	}
 	// A new install takes 隐现 and the automatic curve.
 	n := defaultSettings()
-	if n.Backdrop != "latent" || !n.Equalizer || n.EQPreset != "auto" {
-		t.Errorf("a new install: backdrop %q, equalizer %v, curve %q", n.Backdrop, n.Equalizer, n.EQPreset)
+	if n.Backdrop != "latent" || !n.BackdropPatches || !n.Equalizer || n.EQPreset != "auto" {
+		t.Errorf("a new install: backdrop %q, patches %v, equalizer %v, curve %q", n.Backdrop, n.BackdropPatches, n.Equalizer, n.EQPreset)
 	}
 }
