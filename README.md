@@ -1,3 +1,7 @@
+<p align="center">
+<a href="resources/icon.png"><img src="resources/icon.png" width="80" alt="正在播放：逐字歌词与翻译"></a><br>
+<sub></sub>
+</p>
 <h1 align="center">春日影</h1>
 
 <p align="center">
@@ -8,10 +12,20 @@
 <a href="https://awesomemygo.dev/apps/haruhikage-app"><img src="https://awesomemygo.dev/badge.svg" alt="Listed on Awesome MyGo"></a>
 </p>
 
-<p align="center">
-<a href="image/now-playing-lyrics.png"><img src="image/awesome-mygo.webp" width="880" alt="正在播放：逐字歌词与翻译"></a><br>
-<sub>正在播放 · 逐字歌词与翻译</sub>
-</p>
+## 赞助说明
+请联系: xynrin@icloud.com
+
+## 界面
+
+![主界面：推荐、每日推荐与收藏的歌单](image/home.png)
+
+<p align="center"><sub>主界面 · 推荐、每日推荐与收藏的歌单</sub></p>
+
+| 待播清单 | 选歌 |
+| :---: | :---: |
+| ![待播清单：队列里的歌，随时切换](image/now-playing-picker.png) | ![选歌：在封面墙里挑下一首](image/now-playing-queue.png) |
+| <sub>队列里的歌，随时切换</sub> | <sub>在封面墙里挑下一首</sub> |
+
 
 ## 功能
 
@@ -29,16 +43,7 @@
 - 喜欢歌曲、播放队列、随机与循环播放
 - 浅色 / 深色 / 跟随系统
 
-## 界面
 
-![主界面：推荐、每日推荐与收藏的歌单](image/home.png)
-
-<p align="center"><sub>主界面 · 推荐、每日推荐与收藏的歌单</sub></p>
-
-| 待播清单 | 选歌 |
-| :---: | :---: |
-| ![待播清单：队列里的歌，随时切换](image/now-playing-picker.png) | ![选歌：在封面墙里挑下一首](image/now-playing-queue.png) |
-| <sub>队列里的歌，随时切换</sub> | <sub>在封面墙里挑下一首</sub> |
 
 ## 构建
 
