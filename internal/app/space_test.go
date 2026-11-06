@@ -7,7 +7,7 @@ import (
 	"github.com/egoist/mygo/audio"
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 )
 
 // silence is a song of silence, to play without a stream.
@@ -28,8 +28,8 @@ func (s *silence) Read(buf []float32) (int, error) {
 func TestSpaceAfterOpeningNowPlaying(t *testing.T) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	tr := netease.Track{ID: 7, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000}
-	a.pl.Cue([]netease.Track{tr})
+	tr := domain.Track{Provider: "wy", ID: "7", Name: "宝船", Artists: []domain.Artist{{Name: "DOUDOU"}}, Duration: 200000}
+	a.pl.Cue([]domain.Track{tr})
 	a.pl.SetLyrics(nil)
 	out := audio.NewPlayer(&silence{})
 	out.SetVolume(0)

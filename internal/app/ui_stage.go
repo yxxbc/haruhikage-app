@@ -6,8 +6,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 	"github.com/yxxbc/haruhikage-app/pkg/lyrics"
-	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // The stage shows lyrics as Folia's classic visualizer does: one line at a
@@ -91,44 +91,55 @@ func spaceWords(shapes []wordShape, widths []float32, gap float32) {
 }
 
 // stage shows the lyrics of tr on the whole stage.
-func (a *app) stage(c *ui.Context, tr *netease.Track, accent, tint ui.Color) {
+func (a *app) stage(c *ui.Context, tr *domain.Track, accent, tint ui.Color) {
 	ink := lyricInk(tint)
 	pl := a.pl
 	lines, loaded := pl.Lyrics()
 	w, h := c.Size()
 	f := min(64, max(36, w*0.045))
 	box := ui.Box(c.Key("stage")).Grow(1)
-	// In a quiet part a hot comment takes the middle, the lyrics nearly
-	// gone under it (ui_quiet.go).
-	dim, quiet := a.quietShown(c, box, tr, lines, loaded)
 	if len(lines) == 0 {
 		box.Children(func() {
-			quietUnder(ui.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center(), dim).Children(func() {
+			ui.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().Children(func() {
 				if !loaded {
 					stageSkeleton(c, npShimmer(c), f, w)
 					return
 				}
 				ui.Text(c, "纯音乐，请欣赏").FontSize(28).FontWeight(800).TextColor(ink.Alpha(0.4))
 			})
-			a.stageQuiet(c, dim, f, w)
 		})
 		return
 	}
 	// Where the lyrics are, which is where playback is moved by the offset
 	// a listener set for this song: the music plays on, its words shifted.
-	pos := pl.Position() + a.settings.lyricOffset(tr.ID)
+	pos := pl.Position() + a.settings.lyricOffset(tr.Key())
 	cur := lyrics.Index(lines, pos)
-	// Under a hot comment there is nothing to move: the quiet asks for
-	// the frame where it ends.
-	if pl.Playing() && !(quiet && dim > 0.98) {
+	still := !a.visualActive || c.Preferences().ReduceMotion
+	if a.visualActive && pl.Playing() && still && cur+1 < len(lines) {
+		c.After(lines[cur+1].At - pos + 20*time.Millisecond)
+	}
+	if pl.Playing() && !still {
 		// A style may show part of a line a little before it is sung.
 		lead := max(80*time.Millisecond, stageLead(a.settings.StageStyle))
 		stageNextFrame(c, lines, cur, pos, lead)
 	}
 
 	box.Children(func() {
-		defer a.stageQuiet(c, dim, f, w)
-		quietUnder(ui.Box(c.Key("sung")).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough(), dim).Children(func() {
+		ui.Box(c.Key("sung")).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Children(func() {
+			if still {
+				ui.Column(c).Fill().Center().Padding(0, w*0.1).Gap(12).Children(func() {
+					if cur >= 0 {
+						ui.Text(c, lines[cur].Text).FontSize(f).FontWeight(800).TextColor(ink).TextAlign(ui.Center)
+						if lines[cur].Translation != "" {
+							ui.Text(c, lines[cur].Translation).FontSize(18).TextColor(ink.Alpha(0.72)).TextAlign(ui.Center)
+						}
+					}
+					if cur+1 < len(lines) {
+						ui.Text(c, lines[cur+1].Text).FontSize(18).TextColor(ink.Alpha(0.4)).TextAlign(ui.Center)
+					}
+				})
+				return
+			}
 			// The line before goes as the new one comes.
 			if cur > 0 {
 				gone := float32((pos - lines[cur].At).Seconds()) / 0.4

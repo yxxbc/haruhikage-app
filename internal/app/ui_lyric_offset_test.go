@@ -12,26 +12,26 @@ import (
 // songs keep their own.
 func TestLyricOffsetRemembers(t *testing.T) {
 	s := defaultSettings()
-	if d := s.lyricOffset(7); d != 0 {
+	if d := s.lyricOffset("wy\x007"); d != 0 {
 		t.Fatalf("a song never moved reads as %v", d)
 	}
-	s.setLyricOffset(7, -500*time.Millisecond)
-	s.setLyricOffset(8, 100*time.Millisecond)
-	if d := s.lyricOffset(7); d != -500*time.Millisecond {
+	s.setLyricOffset("wy\x007", -500*time.Millisecond)
+	s.setLyricOffset("wy\x008", 100*time.Millisecond)
+	if d := s.lyricOffset("wy\x007"); d != -500*time.Millisecond {
 		t.Errorf("song 7 moved by %v", d)
 	}
-	if d := s.lyricOffset(8); d != 100*time.Millisecond {
+	if d := s.lyricOffset("wy\x008"); d != 100*time.Millisecond {
 		t.Errorf("song 8 moved by %v, song 7's offset", d)
 	}
 	// Back where it was, the entry goes: a map of zeros would only grow.
-	s.setLyricOffset(7, 0)
-	if d := s.lyricOffset(7); d != 0 {
+	s.setLyricOffset("wy\x007", 0)
+	if d := s.lyricOffset("wy\x007"); d != 0 {
 		t.Errorf("song 7 reads %v after being put back", d)
 	}
-	if _, ok := s.LyricOffsets[7]; ok {
+	if _, ok := s.LyricOffsets["wy\x007"]; ok {
 		t.Error("the entry of a song put back is still there")
 	}
-	if d := s.lyricOffset(8); d != 100*time.Millisecond {
+	if d := s.lyricOffset("wy\x008"); d != 100*time.Millisecond {
 		t.Errorf("putting song 7 back moved song 8 to %v", d)
 	}
 }
@@ -52,7 +52,7 @@ func TestLyricOffsetShows(t *testing.T) {
 	}
 
 	tr := a.pl.Current()
-	a.settings.setLyricOffset(tr.ID, 2000*time.Millisecond)
+	a.settings.setLyricOffset(tr.Key(), 2000*time.Millisecond)
 	tt.Frame()
 	tt.Frame()
 	// 2s of music and 2s of offset put the lyrics at 4s, where the first
@@ -82,7 +82,7 @@ func TestLyricOffsetMenu(t *testing.T) {
 		t.Fatalf("%v; the menu shows %q", err, tt.Menu())
 	}
 	tt.Frame()
-	if d := a.settings.lyricOffset(tr.ID); d != 100*time.Millisecond {
+	if d := a.settings.lyricOffset(tr.Key()); d != 100*time.Millisecond {
 		t.Fatalf("after +100ms: %v", d)
 	}
 	// The button now says what it did, so a listener who forgot can see.
@@ -98,7 +98,7 @@ func TestLyricOffsetMenu(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if d := a.settings.lyricOffset(tr.ID); d != 200*time.Millisecond {
+	if d := a.settings.lyricOffset(tr.Key()); d != 200*time.Millisecond {
 		t.Errorf("after a second +100ms: %v, want 0.2s", d)
 	}
 
@@ -109,7 +109,7 @@ func TestLyricOffsetMenu(t *testing.T) {
 		t.Fatalf("%v; the menu shows %q", err, tt.Menu())
 	}
 	tt.Frame()
-	if d := a.settings.lyricOffset(tr.ID); d != 0 {
+	if d := a.settings.lyricOffset(tr.Key()); d != 0 {
 		t.Errorf("after 复位: %v", d)
 	}
 	if !tt.HasText("歌词偏移") {

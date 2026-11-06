@@ -111,7 +111,7 @@ func autoEQGains(analyzer *autoEQAnalyzer) []float64 {
 	// How far each range is from its even third, as a factor: -1 when it
 	// has none of it, +1 when it has all.
 	excess := func(share float64) float64 {
-		return math.Max(-1, math.Min(1, (share-1.0/3)/ (2.0/3)))
+		return math.Max(-1, math.Min(1, (share-1.0/3)/(2.0/3)))
 	}
 	// A range short of its third is lifted, one over it is cut, at up to
 	// 5 dB: enough to hear on a laptop's speakers, too little to wreck a

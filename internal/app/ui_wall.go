@@ -7,8 +7,8 @@ import (
 	"github.com/egoist/mygo/plugins/glass"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 	"github.com/yxxbc/haruhikage-app/pkg/lyrics"
-	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // The wall lays the queue out as a wall of its covers, under the song
@@ -34,8 +34,8 @@ type wallState struct {
 	off   ui.Point // where Draggable rests it
 	pan   ui.Point // where the trackpad moved it, besides
 	shown ui.Point // where Draggable showed it in the last frame
-	// The song the wall last brought into view, 0 until it shows.
-	track int64
+	// The composite identity last brought into view, empty until it shows.
+	track string
 }
 
 // wallLayout is how the wall lays out its covers in an area: as many
@@ -95,7 +95,7 @@ func (l wallLayout) shows(i int, off ui.Point, w, h, top, foot float32) bool {
 
 // wallPane fills Now Playing with the wall, the song playing over it and
 // the controls along its foot.
-func (a *app) wallPane(c *ui.Context, tr *netease.Track, art *artwork, accent ui.Color, w, h float32, pointerIn bool) {
+func (a *app) wallPane(c *ui.Context, tr *domain.Track, art *artwork, accent ui.Color, w, h float32, pointerIn bool) {
 	top := topBar(c)
 	songH := min(max(h*0.36, 200), 320)
 	// The wall goes on under the foot of the song, into the frost; at
@@ -129,7 +129,7 @@ func (a *app) wallPane(c *ui.Context, tr *netease.Track, art *artwork, accent ui
 // wallSong is the song playing, over the wall: its cover, which breathes
 // as Now Playing's does, its name, and the line of its lyrics sung, with
 // the next.
-func (a *app) wallSong(c *ui.Context, tr *netease.Track, art *artwork, top, h float32) {
+func (a *app) wallSong(c *ui.Context, tr *domain.Track, art *artwork, top, h float32) {
 	pl := a.pl
 	// The wall is the cover, so its words take the ink the backdrop takes:
 	// white over a dark one, a deep shade over paper. Before the cover
@@ -143,7 +143,7 @@ func (a *app) wallSong(c *ui.Context, tr *netease.Track, art *artwork, top, h fl
 		// Not Now Playing's cover, which the pointer tilts and flings: here
 		// the wall is what the pointer moves.
 		size := h - 48
-		cov := ui.Box(c.Key(coverKey{tr.ID, 0})).Size(size, size).Radius(16).Shadow(0, 24, 50, -12, ui.RGBA(0, 0, 0, 0.55))
+		cov := ui.Box(c.Key(coverKey{tr.Key(), 0})).Size(size, size).Radius(16).Shadow(0, 24, 50, -12, ui.RGBA(0, 0, 0, 0.55))
 		scale := float32(1)
 		if !pl.Playing() {
 			scale = 0.92
@@ -167,23 +167,20 @@ func (a *app) wallSong(c *ui.Context, tr *netease.Track, art *artwork, top, h fl
 			textCard.Background(ui.RGBA(0, 0, 0, 0.18))
 		}
 		textCard.Children(func() {
-			if r := pl.Radio(); r != "" {
-				a.radioChip(c, r)
-			}
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 				ui.Text(c, tr.Name).FontSize(26).FontWeight(800).LetterSpacing(-0.4).SingleLine().Shrink(1).MinWidth(0).TextColor(ink)
 				a.likeButton(c.Key("like"), tr, 20, ink.Alpha(0.7))
-				a.songMenu(c.Key("more"), tr, 20, ink.Alpha(0.7)).Margin(0, -8, 0, 0)
+				a.songMore(c.Key("more"), tr, 20, ink.Alpha(0.7))
 			})
-			a.artistLinks(c, tr, ink.Alpha(0.6), ink, true).FontSize(14).SingleLine()
+			a.artistLinks(c, tr, ink.Alpha(0.6), ink).FontSize(14).SingleLine()
 			lines, _ := pl.Lyrics()
 			if len(lines) == 0 {
 				return
 			}
-			pos := pl.Position()
+			pos := pl.Position() + a.settings.lyricOffset(tr.Key())
 			cur := lyrics.Index(lines, pos)
 			// Redraw as the next line begins.
-			if pl.Playing() && cur+1 < len(lines) {
+			if a.visualActive && pl.Playing() && cur+1 < len(lines) {
 				c.After(lines[cur+1].At - pos + 20*time.Millisecond)
 			}
 			sung := ""
@@ -211,13 +208,13 @@ func (a *app) wall(c *ui.Context, y, w, h, top, foot, frost float32) {
 	}
 	// Shown, the wall brings the song playing to its middle; after, it
 	// glides to the next as little as shows it, unless held.
-	if tr := pl.Current(); tr != nil && tr.ID != ws.track && playing >= 0 {
-		if ws.track == 0 {
+	if tr := pl.Current(); tr != nil && tr.Key() != ws.track && playing >= 0 {
+		if ws.track == "" {
 			ws.pan, ws.off = ui.Point{}, l.centre(playing, w, h, top, foot)
 		} else if !l.shows(playing, addPoint(ws.shown, ws.pan), w, h, top, foot) {
 			ws.off = subPoint(l.centre(playing, w, h, top, foot), ws.pan)
 		}
-		ws.track = tr.ID
+		ws.track = tr.Key()
 	}
 
 	// Covers go only into the frost, never past it over the song: the area
@@ -245,7 +242,7 @@ func (a *app) wall(c *ui.Context, y, w, h, top, foot, frost float32) {
 		ws.shown = plane.DragOffset()
 		at := addPoint(ws.shown, ws.pan)
 		// The rows sway while the song plays, and settle while it is paused.
-		swaying := pl.Playing() && !c.Preferences().ReduceMotion
+		swaying := a.visualActive && pl.Playing() && !c.Preferences().ReduceMotion
 		now := c.Now()
 		if swaying {
 			_, turn := rowSwayTarget(0, now)
@@ -281,7 +278,7 @@ func (a *app) wall(c *ui.Context, y, w, h, top, foot, frost float32) {
 				if swaying {
 					to, _ := rowSwayTarget(r, now)
 					row.AnimatePose(ui.Pose{X: to}, ui.Animation{Duration: wallSwayHalf, Ease: ui.EaseInOut})
-				} else {
+				} else if a.visualActive {
 					row.AnimatePose(ui.Pose{}, ui.Animation{Spring: ui.SpringOptions{Duration: 1200 * time.Millisecond}})
 				}
 				if r == pointRow {
@@ -346,9 +343,9 @@ func rowSwayTarget(r int, now time.Time) (float32, time.Duration) {
 // wallTile is the cover of the i-th song of the queue, tr, x along its
 // row, scaled to lift: the song playing stands out,
 // ringed, and the one under the pointer says what it is.
-func (a *app) wallTile(c *ui.Context, tr *netease.Track, i int, x float32, playing, hovered bool, lift float32) {
+func (a *app) wallTile(c *ui.Context, tr *domain.Track, i int, x float32, playing, hovered bool, lift float32) {
 	tile := ui.Box(c.Key(i)).Absolute().Left(x).Top(0).Size(wallTile, wallTile).Radius(12).
-		Label(tr.Name).ContextMenu(a.songItems(tr, 0))
+		Label(tr.Name).ContextMenu(a.songItems(tr, ""))
 	tile.AnimatePose(ui.Pose{Scale: lift}, ui.Animation{Spring: ui.SpringOptions{Duration: 400 * time.Millisecond, Bounce: 0.2}})
 	if !tr.Playable() {
 		tile.Opacity(0.4)

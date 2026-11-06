@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"image"
 	"image/draw"
 	"image/png"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage-app/internal/netease"
 	"github.com/yxxbc/haruhikage-app/internal/player"
 )
 
@@ -75,16 +75,10 @@ func TestBackdropDriftFrames(t *testing.T) {
 	}
 	const w, h = 300, 420
 	var rows []*image.RGBA
-	for _, q := range []string{"春日影 MyGO", "晴天 周杰伦", "夜に駆ける"} {
-		hits, err := netease.Search(q, 1)
-		if err != nil || len(hits) == 0 {
-			t.Fatal(q, err)
-		}
-		img, err := fetchImage(netease.Sized(hits[0].Album.PicURL, 600))
-		if err != nil {
-			t.Fatal(err)
-		}
-		art := &artwork{tint: dominantColor(img)}
+	// Reproducible local colors keep a visual test offline and independent
+	// of changing search results or provider artwork servers.
+	for _, tint := range []ui.Color{ui.RGB(210, 80, 130), ui.RGB(50, 140, 210), ui.RGB(170, 180, 90)} {
+		art := &artwork{tint: tint}
 		shots := []struct{ drift, bass float32 }{{0, 0}, {2, 0}, {4, 0}, {4, 0.9}}
 		row := image.NewRGBA(image.Rect(0, 0, w*len(shots), h))
 		for i, s := range shots {
@@ -101,7 +95,12 @@ func TestBackdropDriftFrames(t *testing.T) {
 	for i, r := range rows {
 		draw.Draw(out, image.Rect(0, i*h, r.Bounds().Dx(), (i+1)*h), r, image.Point{}, draw.Src)
 	}
-	f, _ := os.Create(filepath.Join(dir, "drift.png"))
+	f, err := os.Create(filepath.Join(dir, "drift.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer f.Close()
-	png.Encode(f, out)
+	if err := png.Encode(f, out); err != nil {
+		t.Fatal(fmt.Errorf("save drift frames: %w", err))
+	}
 }

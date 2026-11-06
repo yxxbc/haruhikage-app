@@ -14,7 +14,7 @@ import (
 // They are kept with the settings.
 
 // lyricOffset returns the offset of track id, 0 for a song not moved.
-func (s *settings) lyricOffset(id int64) time.Duration {
+func (s *settings) lyricOffset(id string) time.Duration {
 	if s.LyricOffsets == nil {
 		return 0
 	}
@@ -23,14 +23,14 @@ func (s *settings) lyricOffset(id int64) time.Duration {
 
 // setLyricOffset moves track id's lyrics by d, forgetting the offset for a
 // song back where it was: a map of zeros would only grow.
-func (s *settings) setLyricOffset(id int64, d time.Duration) {
+func (s *settings) setLyricOffset(id string, d time.Duration) {
 	ms := int(d / time.Millisecond)
 	if ms == 0 {
 		delete(s.LyricOffsets, id)
 		return
 	}
 	if s.LyricOffsets == nil {
-		s.LyricOffsets = map[int64]int{}
+		s.LyricOffsets = map[string]int{}
 	}
 	s.LyricOffsets[id] = ms
 }
@@ -48,7 +48,7 @@ func (a *app) lyricOffsetButton(c *ui.Context) {
 	if tr == nil {
 		return
 	}
-	d := a.settings.lyricOffset(tr.ID)
+	d := a.settings.lyricOffset(tr.Key())
 	b := ui.ButtonBase(c.Key("lyric-offset")).Padding(6, 10, 6, 10).Radius(999).Gap(4).AlignItems(ui.Center).
 		FocusRing(false).Label("歌词偏移").Tooltip("歌词比音乐快时，把歌词往后退")
 	fg := white.Alpha(0.55)
@@ -73,7 +73,7 @@ func (a *app) lyricOffsetButton(c *ui.Context) {
 		for _, step := range lyricOffsetSteps {
 			label := fmt.Sprintf("%+d ms", step)
 			if m.Item(label).Chosen() {
-				a.settings.setLyricOffset(tr.ID, a.settings.lyricOffset(tr.ID)+time.Duration(step)*time.Millisecond)
+				a.settings.setLyricOffset(tr.Key(), a.settings.lyricOffset(tr.Key())+time.Duration(step)*time.Millisecond)
 				a.settings.save()
 				a.redraw()
 			}
@@ -81,7 +81,7 @@ func (a *app) lyricOffsetButton(c *ui.Context) {
 		if d != 0 {
 			m.Separator()
 			if m.Item("复位").Chosen() {
-				a.settings.setLyricOffset(tr.ID, 0)
+				a.settings.setLyricOffset(tr.Key(), 0)
 				a.settings.save()
 				a.redraw()
 			}

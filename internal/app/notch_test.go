@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -12,17 +13,20 @@ import (
 	"github.com/egoist/mygo/audio"
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 )
 
 // The notch, turned off, shows itself as the first song plays, and only
 // then; its button keeps it on.
 func TestNotchGreetsOnce(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("the notch greeting is macOS-only")
+	}
 	a := newTestApp()
 	a.settings = defaultSettings()
 	n := &notch{a: a, w0: 200, h0: 32, winW: notchOpenW + 60, winH: 240}
 	a.notch = n
-	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
+	a.pl.Cue([]domain.Track{{Provider: "wy", ID: "7", Name: "宝船", Duration: 200000}})
 	a.syncWindows()
 	if n.hello {
 		t.Fatal("greeted before the song played")
@@ -48,7 +52,7 @@ func TestNotchGreetsOnce(t *testing.T) {
 
 	// Turned off again, it does not greet the next song.
 	a.settings.Notch = false
-	a.pl.Cue([]netease.Track{{ID: 8, Name: "下一首", Duration: 200000}})
+	a.pl.Cue([]domain.Track{{Provider: "wy", ID: "8", Name: "下一首", Duration: 200000}})
 	a.pl.Attach(out)
 	a.syncWindows()
 	if n.hello {
@@ -60,11 +64,14 @@ func TestNotchGreetsOnce(t *testing.T) {
 // be clicked. It used to open the player, which hid the button, and leaving
 // brought it back only to open again as the pointer came back to it.
 func TestNotchGreetingKeptUnderPointer(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("the notch greeting is macOS-only")
+	}
 	a := newTestApp()
 	a.settings = defaultSettings()
 	n := &notch{a: a, real: true, w0: 185, h0: 32, winW: notchOpenW + 60, winH: 240}
 	a.notch = n
-	a.pl.Cue([]netease.Track{{ID: 7, Name: "宝船", Duration: 200000}})
+	a.pl.Cue([]domain.Track{{Provider: "wy", ID: "7", Name: "宝船", Duration: 200000}})
 	n.greet()
 	if !n.hello {
 		t.Fatal("did not greet")
@@ -93,7 +100,7 @@ func TestNotchGreetingKeptUnderPointer(t *testing.T) {
 }
 
 // With NM_FRAMES set, saves the notch as it greets, growing and grown, and
-// the player bar holding a song a login picked up.
+// the main player bar showing the same provider-neutral song.
 func TestFirstUseFrames(t *testing.T) {
 	dir := os.Getenv("NM_FRAMES")
 	if dir == "" {
@@ -108,7 +115,7 @@ func TestFirstUseFrames(t *testing.T) {
 	a.settings = defaultSettings()
 	n := &notch{a: a, real: true, w0: 185, h0: 32, winW: notchOpenW + 60, winH: 240}
 	a.notch = n
-	a.pl.Cue([]netease.Track{{ID: 7, Name: "NAINAINAI", Artists: []netease.Artist{{Name: "ATARASHII GAKKO!"}}, Duration: 193877}})
+	a.pl.Cue([]domain.Track{{Provider: "wy", ID: "7", Name: "NAINAINAI", Artists: []domain.Artist{{Name: "ATARASHII GAKKO!"}}, Duration: 193877}})
 	main := ui.NewTester(a.view, 1200, 800) // for the app's colors
 	main.Frame()
 	tt := ui.NewTester(n.view, int(n.winW), int(n.winH))
@@ -120,8 +127,7 @@ func TestFirstUseFrames(t *testing.T) {
 		save(fmt.Sprintf("notch-hello-%d", ms), tt)
 	}
 
-	a.picked = pickedUp{id: 7, heard: "3分钟前在手机上听过"}
 	main.Advance(time.Second)
 	main.Frame()
-	save("pickup-bar", main)
+	save("player-bar", main)
 }

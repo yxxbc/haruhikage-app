@@ -8,3 +8,8 @@ node_modules/
 
 # Notes kept on this machine only, not in the repository.
 /KNOWN-ISSUES.md
+
+# Local source scripts, analysis and Windows build artifacts.
+/.analysis/
+/resources/windows-amd64/*.exe
+/portable/

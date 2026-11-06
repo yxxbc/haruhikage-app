@@ -1,170 +1,142 @@
 package app
 
 import (
+	"context"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-
-	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/catalog"
+	"github.com/yxxbc/haruhikage-app/internal/catalogbrowse"
+	"github.com/yxxbc/haruhikage-app/internal/domain"
+	"github.com/yxxbc/haruhikage-app/internal/library"
 	"github.com/yxxbc/haruhikage-app/internal/player"
+	"github.com/yxxbc/haruhikage-app/internal/source"
 )
 
 type pageKind int
 
 const (
 	pageHome pageKind = iota
-	pageDaily
+	pageFavorites
 	pageRecent
-	pageCharts
 	pagePlaylist
 	pageSearch
-	pageFM
+	pageSources
+	pageSettings
+	pageCharts
 	pageArtist
 	pageAlbum
-	pageUser
-	pagePodcast
-	pagePodcasts
 )
 
 type route struct {
-	page pageKind
-	// id is the playlist, artist, album, user or podcast the page shows.
-	id int64
-	// query and kind are what a search page searched for.
-	query string
-	kind  netease.SearchType
+	page                pageKind
+	id, provider, query string
 }
 
-// app is the state both windows show. Everything in it is read and changed
-// on the main thread: by the views, and by goroutines through post.
+// app owns UI state on the main thread. Services only return immutable snapshots.
 type app struct {
-	win   *mygo.Window
-	notch *notch
-	tray  *mygo.Tray // the icon in the menu bar or notification area, while it shows
-	art   *artCache
-	pl    *player.Player
-	pal   palette
-
-	route   route
-	history []route
-	forward []route // the pages gone back from, the last first to go to
-
-	profile      *netease.Profile
-	mine, saved  []netease.Playlist // the listener's playlists: made, and saved
-	recPlaylists []netease.Playlist // the day's playlists picked for the listener
-	login        loginState
-	accountOpen  bool           // the dropdown of the account row shows
-	naming       nameDialog     // the name of a playlist asked for
-	deleting     deleteDialog   // whether to delete a playlist, asked
-	liked        map[int64]bool // the songs the listener likes
-	toast        string         // a message to show once
-	picked       pickedUp       // the song a login picked up, waiting to play
-
-	// The episodes the listener likes, and doesn't, as far as NetEase has
-	// answered, and those asked about: see ui_like.go.
-	likedPrograms, askedPrograms map[int64]bool
-
-	daily       []netease.Track
-	dailySpin   spinState // the record on the daily card
-	dailyBars   barState  // the bars on its play button
-	featured    []netease.Playlist
-	charts      []netease.Playlist
-	homeErr     string
-	homeLoading bool
-	homeAt      time.Time // when what the home page shows was asked for
-
-	recent        []netease.Play // the plays the recent page lists
-	recentErr     string
-	recentLoading bool
-
-	playlists  map[int64]*netease.Playlist
-	loadingPl  map[int64]bool
-	plErr      map[int64]string
-	artists    map[int64]*artistData
-	artistTab  int // what an artist's page lists: artistHot, artistLatest, artistAlbums or artistEvents
-	albums     map[int64]*albumData
-	users      map[int64]*userData
-	podcasts   map[int64]*podcastData
-	podcastTab *podcastTab // the podcasts tab's lists
-	trackList  ui.ListState
-	// Where the page and the sidebar are scrolled, kept while Now Playing
-	// covers them, unbuilt.
-	pageScroll ui.ScrollState
-	navScroll  ui.ScrollState
-	scrolled   route // the page trackList and pageScroll are of
-
-	mineCollapsed, savedCollapsed bool
-
-	query       string
-	searchBox   ui.Handle
-	searches    map[route]*searchData // the results of each search, by its page
-	searched    route                 // the search last shown, which the sidebar goes back to
-	suggestions suggestState          // what the search field's query may be after
-
-	nowPlaying  bool
-	npOpen      bool      // Now Playing as it last showed: open or not
-	npChangedAt time.Time // when it last opened or closed
-	npPane      int       // paneLyrics, paneQueue, paneStage, paneComments, paneProgram or paneCaptions
-	npPaneTop   float32   // how far the cover beside the pane starts below its top
-	npTabsH     float32   // how tall the pane's tabs were, last laid out
-	lyricScroll ui.ScrollState
-	lyricGlide  lyricGlide
-	lyricAt     int
-	lyricTrack  int64
-	queueList   ui.ListState
-	queueAt     int // the row of the queue pane last scrolled to, -1 while it is hidden
-	comments    commentState
-	tabCount    rollState // the count on the comments' tab, as it rolls
-
-	fmMode        int    // the FM mode chosen, in fmModes
-	radioStarting string // the radio asked for its first songs, or ""
-
-	scrub      float64
-	scrubbing  bool
-	volume     float64
-	volumeOpen bool // the volume popover of the player bar shows
-	mutedFrom  float64
-
-	rowBars barState
-	// underTop and underBottom say whether the page has content under its
-	// bars, which show their scroll edges then.
-	underTop, underBottom bool
-	barScrub              scrubState
-	npScrub               scrubState
-	backdropCache         backdropCache // the backdrop of Now Playing, as last painted
-	npArt                 *artwork      // the cover whose colors Now Playing shows
-	npCoverState          coverState    // the cover of Now Playing, as it is tilted and flicked
-	wallState             wallState     // the wall of the queue's covers, as it is dragged
-	quiet                 quietState    // the quiet parts of the song playing, for its hot comments
-	captions              captionState  // the episode playing's captions, and the model that writes them
-	sig                   playerSig
-	quitting              bool
-
-	settings    settings
-	settingsTab settingsSection // the settings window's category chosen
-	settingsWin *mygo.Window
-	cacheUsed   int64 // the bytes the song cache takes, -1 until measured
-	updates     bool  // the update plugin is used (useUpdater)
-
-	restored     bool   // playback picked up where it was left
-	savedSession string // the session as last kept
-	sessionDue   bool   // a save of the session is due
+	win, settingsWin       *mygo.Window
+	notch                  *notch
+	tray                   *mygo.Tray
+	art                    *artCache
+	pl                     *player.Player
+	pal                    palette
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	lib                    *library.Store
+	catalog                *catalog.Service
+	browse                 *catalogbrowse.Service
+	charts                 []catalogbrowse.Chart
+	browseTitle            string
+	cacheLimitText         string
+	sources                *source.Manager
+	sourceList             []source.Info
+	sourceBusy             bool
+	sourcePath             string
+	dataDir                string
+	route                  route
+	history, forward       []route
+	mine                   []domain.Playlist
+	liked                  map[string]bool
+	favorites              []domain.Track
+	recent                 []domain.Track
+	tracks                 []domain.Track
+	dataLoading            bool
+	dataErr                string
+	dataCancel             context.CancelFunc
+	dataGen                uint64
+	trackList              ui.ListState
+	pageScroll, navScroll  ui.ScrollState
+	scrolled               route
+	query                  string
+	searchBox              ui.Handle
+	searched               route
+	searchData             *searchData
+	nowPlaying, npOpen     bool
+	npChangedAt            time.Time
+	npPane                 int
+	npPaneTop, npTabsH     float32
+	lyricScroll            ui.ScrollState
+	lyricGlide             lyricGlide
+	lyricAt                int
+	lyricTrack             string
+	queueList              ui.ListState
+	queueAt                int
+	scrub                  float64
+	scrubbing              bool
+	volume                 float64
+	volumeOpen             bool
+	mutedFrom              float64
+	rowBars                barState
+	underTop, underBottom  bool
+	barScrub, npScrub      scrubState
+	backdropCache          backdropCache
+	npArt                  *artwork
+	npCoverState           coverState
+	wallState              wallState
+	sig                    playerSig
+	quitting, visualActive bool
+	settings               settings
+	cacheUsed              int64
+	restored               bool
+	savedSession           string
+	sessionDue             bool
+	sessionWriter          *stateWriter
+	toast                  string
+	naming                 nameDialog
+	deleting               deleteDialog
+	// Tests replace scheduling, never the live UI-thread entry point.
+	runTask  func(func())
+	testPost func(func())
 }
 
-// post runs fn on the main thread and redraws both windows. Without a
-// window, as in tests, it drops fn.
+func (a *app) run(fn func()) {
+	if a.runTask != nil {
+		a.runTask(fn)
+	} else {
+		go fn()
+	}
+}
 func (a *app) post(fn func()) {
-	if a.win == nil {
+	if a.testPost != nil {
+		a.testPost(fn)
 		return
 	}
-	a.win.Update(func() {
-		fn()
-		a.redraw()
-	})
+	if a.win != nil {
+		a.win.Update(func() {
+			if !a.quitting {
+				fn()
+				a.redraw()
+			}
+		})
+	}
 }
-
 func (a *app) redraw() {
 	if a.win != nil {
 		a.win.Invalidate()
@@ -174,8 +146,7 @@ func (a *app) redraw() {
 	}
 }
 
-// shotHook, when set, drives the app to check its design.
-var shotHook func(a *app)
+var shotHook func(*app)
 
 func (a *app) showMain() {
 	if a.win != nil {
@@ -184,86 +155,88 @@ func (a *app) showMain() {
 		}
 		a.win.Show()
 		a.win.Focus()
-		// From the menu bar alone the app may be inactive.
 		mygo.App.Focus()
 	}
 }
+func (a *app) visualState() {
+	a.visualActive = a.win != nil && a.win.IsVisible() && !a.win.IsMinimized()
+	a.syncDock()
+	a.redraw()
+}
 
-// Run runs the app until it quits.
+func newApp() *app {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &app{ctx: ctx, cancel: cancel, liked: map[string]bool{}, catalog: catalog.New(), browse: catalogbrowse.New(), lyricAt: -1, queueAt: -1, cacheUsed: -1, visualActive: true}
+}
 func Run() error {
-	a := &app{
-		playlists:  map[int64]*netease.Playlist{},
-		loadingPl:  map[int64]bool{},
-		plErr:      map[int64]string{},
-		artists:    map[int64]*artistData{},
-		albums:     map[int64]*albumData{},
-		users:      map[int64]*userData{},
-		podcasts:   map[int64]*podcastData{},
-		podcastTab: &podcastTab{},
-		searches:   map[route]*searchData{},
-		lyricAt:    -1,
-		queueAt:    -1,
-		cacheUsed:  -1,
-	}
-	moveOldData()
-	a.useUpdater()
+	a := newApp()
 	mygo.App.WhenReady(func() {
 		a.settings = loadSettings()
 		a.settings.applyAppearance()
 		a.npPane = a.lyricsPaneChosen()
-		// Before the window: on Windows it lays out its content as it is
-		// made, and the view asks the player what plays.
+		dir, err := mygo.App.Path(mygo.PathUserData)
+		if err == nil {
+			a.dataDir = dir
+			a.lib, err = library.Open(filepath.Join(dir, "library.sqlite"))
+		}
+		if err != nil {
+			a.toast = "本地资料库打开失败，请检查数据目录"
+		}
+		exe, _ := os.Executable()
+		host := "source-host"
+		if runtime.GOOS == "windows" {
+			host += ".exe"
+		}
+		a.sources, err = source.NewManager(filepath.Join(dir, "sources"), filepath.Join(filepath.Dir(exe), host))
+		if err != nil {
+			a.toast = "音源目录打开失败"
+		} else {
+			a.sourceList = a.sources.List()
+		}
 		a.art = newArtCache(a.post)
 		a.pl = player.New(a.post)
-		a.pl.Quality = func() string { return a.settings.Quality }
+		a.pl.Quality = func() string { return a.settings.quality(a.pl.Current()) }
 		a.pl.Normalize = func() bool { return a.settings.Normalize }
 		a.pl.Equalizer = func() bool { return a.settings.Equalizer }
 		a.pl.Preset = func() string { return a.settings.EQPreset }
 		a.pl.Cache = newSongCache(a.settings.CacheMB)
-		a.pl.Changed = func() {
-			a.keepSession()
-			a.syncCaptions()
+		if a.sources != nil {
+			a.pl.Resolve = a.sources.Resolve
 		}
+		a.pl.LoadLyrics = a.catalog.Lyrics
+		a.pl.LoadArtwork = fetchArtwork
+		a.pl.Started = func(t domain.Track) {
+			if a.lib != nil {
+				a.run(func() {
+					err := a.lib.RecordPlay(a.ctx, t, 0)
+					a.post(func() {
+						if err != nil {
+							a.toast = "播放历史保存失败"
+						}
+						a.refreshLibrary()
+					})
+				})
+			}
+		}
+		a.pl.Changed = a.keepSession
 		a.volume = a.settings.Volume
 		a.pl.SetVolume(a.volume)
-		a.win = mygo.NewWindow(mygo.WindowOptions{
-			Title:         mygo.App.Name(),
-			Width:         1180,
-			Height:        780,
-			MinWidth:      880,
-			MinHeight:     580,
-			StateKey:      "main",
-			TitleBarStyle: mygo.TitleBarHidden,
-			// As tall as the edge over a page (Linux, Windows).
-			TitleBarHeight: buttonsHeight,
-			// Inset from the corner, within the sidebar, as macOS 26's
-			// apps with a sidebar place them.
-			TrafficLightPosition: &mygo.Point{X: 20, Y: 20},
-			Vibrancy:             mygo.VibrancySidebar,
-			BackgroundColor:      "light-dark(#ffffff, #141416)",
-			Content:              ui.View(a.view),
-		})
+		a.win = mygo.NewWindow(mygo.WindowOptions{Title: mygo.App.Name(), Width: 1180, Height: 780, MinWidth: 880, MinHeight: 580, StateKey: "main", TitleBarStyle: mygo.TitleBarHidden, TitleBarHeight: buttonsHeight, TrafficLightPosition: &mygo.Point{X: 20, Y: 20}, Vibrancy: mygo.VibrancySidebar, BackgroundColor: "light-dark(#ffffff, #141416)", Content: ui.View(a.view)})
 		a.setMenu()
-		a.boot()
-		// The notch player is macOS's, over its menu bar: elsewhere it would
-		// hang at the top of the screen as a black box.
+		a.restoreSession()
+		a.refreshLibrary()
 		if runtime.GOOS == "darwin" {
 			a.notch = newNotch(a)
 		}
-		// From the menu bar alone, the Dock icon shows while the window
-		// does.
-		a.syncDock()
-		a.win.OnShow(a.syncDock)
-		a.win.OnHide(a.syncDock)
-		// Shown or switched to the morning after, it shows the new day's.
-		a.win.OnFocus(a.freshenHome)
+		a.win.OnShow(a.visualState)
+		a.win.OnHide(a.visualState)
+		a.win.OnMinimize(a.visualState)
+		a.win.OnRestore(a.visualState)
 		a.applyTray()
+		a.visualState()
 		if shotHook != nil {
 			shotHook(a)
 		}
-		// Closing the window hides it: music plays on, and the Dock icon
-		// or the tray's brings it back. A Linux desktop without a tray
-		// has neither, so there closing it quits.
 		a.win.OnClose(func(e *mygo.CloseEvent) {
 			if a.quitting {
 				return
@@ -279,14 +252,28 @@ func Run() error {
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		a.quitting = true
 		a.settings.Volume = a.volume
-		a.settings.save()
+		_ = a.settings.save()
 		a.saveSession()
-		if write := a.transcriptWrite(); write != nil {
-			write()
+		a.cancel()
+		if a.dataCancel != nil {
+			a.dataCancel()
+		}
+		if a.pl != nil {
+			_ = a.pl.Close()
+		}
+		if a.sources != nil {
+			_ = a.sources.Close()
+		}
+		if a.art != nil {
+			a.art.Close()
+		}
+		if a.sessionWriter != nil {
+			a.sessionWriter.Close()
+		}
+		if a.lib != nil {
+			_ = a.lib.Close()
 		}
 	})
-	// Windows leaves an icon in the notification area after its app until
-	// the pointer passes over it.
 	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
 		if a.tray != nil {
 			a.tray.Destroy()
@@ -295,4 +282,25 @@ func Run() error {
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnActivate(func(bool) { a.showMain() })
 	return mygo.App.Run()
+}
+
+var artworkClient = &http.Client{Timeout: 12 * time.Second}
+
+func fetchArtwork(ctx context.Context, t domain.Track) ([]byte, error) {
+	if t.Album.PicURL == "" {
+		return nil, nil
+	}
+	req, e := http.NewRequestWithContext(ctx, http.MethodGet, t.Album.PicURL, nil)
+	if e != nil {
+		return nil, e
+	}
+	res, e := artworkClient.Do(req)
+	if e != nil {
+		return nil, e
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return nil, nil
+	}
+	return io.ReadAll(io.LimitReader(res.Body, 8<<20))
 }

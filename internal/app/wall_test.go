@@ -11,7 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 )
 
 // wallApp is an app showing the wall of a queue of n songs, the at-th
@@ -19,9 +19,9 @@ import (
 func wallApp(t *testing.T, n, at int) (*app, *ui.Tester) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	var tracks []netease.Track
+	var tracks []domain.Track
 	for i := range n {
-		tracks = append(tracks, netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("歌%03d", i), Duration: 200000})
+		tracks = append(tracks, domain.Track{Provider: "wy", ID: fmt.Sprint(i + 1), Name: fmt.Sprintf("歌%03d", i), Duration: 200000})
 	}
 	a.pl.Cue(tracks)
 	if at > 0 {
@@ -74,6 +74,10 @@ func TestWallPlaysTheCoverClicked(t *testing.T) {
 func TestWallPlaysTheCoverSwaying(t *testing.T) {
 	a, tt := wallApp(t, 300, 0)
 	a.pl.Hold(0) // playing
+	// Start at a deterministic turn, independent of the Tester's wall-clock
+	// origin. Then wait through a whole sway before testing its leading edge.
+	tt.Advance(wallSwayHalf - time.Duration(tt.Now().UnixNano()%int64(wallSwayHalf)))
+	tt.Frame()
 	for range 8 {
 		tt.Advance(time.Second)
 		tt.Frame()
@@ -162,7 +166,7 @@ func TestWallFrames(t *testing.T) {
 		for i := range a.pl.Queue() {
 			url := fmt.Sprintf("art%d", i)
 			a.pl.Queue()[i].Album.PicURL = url
-			a.art.art[netease.Sized(url, 240)] = &artwork{bmp: solidBitmap(colors[i%len(colors)]), tint: colors[i%len(colors)]}
+			a.art.art[url] = &artwork{bmp: solidBitmap(colors[i%len(colors)]), tint: colors[i%len(colors)]}
 		}
 		tt.Advance(time.Second)
 		tt.Frame()

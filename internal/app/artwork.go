@@ -2,19 +2,22 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	_ "image/jpeg"
 	_ "image/png"
+	"io"
 	"math"
+	"net"
+	"net/http"
 	"time"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	_ "golang.org/x/image/webp"
-
-	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // artwork is a cover, decoded and ready to draw, with what the player
@@ -25,28 +28,89 @@ type artwork struct {
 	tint     ui.Color // the cover's most vivid color
 	failed   bool
 	used     time.Time // when it was last asked for
+	cost     int64     // encoded data, decoded pixels and mip/texture allowance
+	release  time.Time // release CPU pixels on a later UI-thread access
 }
 
-// artCache loads covers on goroutines and keeps them while they show, and
-// for a while after: their pixels on the GPU, and on the CPU only their
-// data, which takes a fraction of the pixels. Its methods run on the main
-// thread; post runs a function there.
+// artCache owns its HTTP lifetime and a bounded worker queue. All cache
+// mutation and Bitmap operations after publication run on the UI thread.
+// Eviction drops references; MyGo owns texture retirement on the renderer.
+// In particular, no timer or worker destroys a canvas/native GPU resource.
 type artCache struct {
-	art   map[string]*artwork
-	busy  map[string]bool
-	sem   chan struct{}
-	post  func(func())
-	now   func() time.Time
-	swept time.Time
-	asked time.Time // when a cover was last asked for
+	art    map[string]*artwork
+	busy   map[string]*artRequest
+	jobs   chan *artRequest
+	post   func(func())
+	now    func() time.Time
+	swept  time.Time
+	asked  time.Time
+	client *http.Client
+	ctx    context.Context
+	cancel context.CancelFunc
+	closed bool
+	budget int64
+	bytes  int64
 }
+
+type artRequest struct {
+	key, url string
+	backdrop bool
+	used     time.Time
+	ctx      context.Context
+	cancel   context.CancelFunc
+}
+
+const (
+	artBudget    = 96 << 20
+	artEntries   = 192
+	artWorkers   = 4
+	artPending   = 32
+	artMaxBytes  = 12 << 20
+	artMaxPixels = 4 << 20
+)
 
 // artKeep is how long a cover not asked for stays: the pages scrolled
 // through over a session show thousands.
 const artKeep = 5 * time.Minute
 
 func newArtCache(post func(func())) *artCache {
-	return &artCache{art: map[string]*artwork{}, busy: map[string]bool{}, sem: make(chan struct{}, 8), post: post, now: time.Now, swept: time.Now()}
+	ctx, cancel := context.WithCancel(context.Background())
+	c := &artCache{
+		art: map[string]*artwork{}, busy: map[string]*artRequest{}, jobs: make(chan *artRequest, artPending),
+		post: post, now: time.Now, swept: time.Now(), client: newArtClient(),
+		ctx: ctx, cancel: cancel, budget: artBudget,
+	}
+	for range artWorkers {
+		go c.worker()
+	}
+	return c
+}
+
+func newArtClient() *http.Client {
+	return &http.Client{Timeout: 15 * time.Second, Transport: &http.Transport{
+		Proxy:               http.ProxyFromEnvironment,
+		DialContext:         (&net.Dialer{Timeout: 8 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		TLSHandshakeTimeout: 8 * time.Second, ResponseHeaderTimeout: 10 * time.Second,
+		MaxIdleConns: artWorkers, MaxIdleConnsPerHost: artWorkers,
+		IdleConnTimeout: 30 * time.Second,
+	}}
+}
+
+// Close is called on the UI thread during app shutdown. It cancels both
+// queued and running requests; late Window.Update callbacks are discarded.
+func (c *artCache) Close() {
+	if c.closed {
+		return
+	}
+	c.closed = true
+	c.cancel()
+	for _, req := range c.busy {
+		req.cancel()
+	}
+	clear(c.busy)
+	clear(c.art)
+	c.bytes = 0
+	c.client.CloseIdleConnections()
 }
 
 // sweep drops the covers not asked for in artKeep before the last one
@@ -60,14 +124,49 @@ func (c *artCache) sweep(now time.Time) {
 	c.swept = now
 	for key, a := range c.art {
 		if c.asked.Sub(a.used) > artKeep {
-			delete(c.art, key)
+			c.drop(key)
+		}
+	}
+	for key, req := range c.busy {
+		if c.asked.Sub(req.used) > artKeep {
+			req.cancel()
+			delete(c.busy, key)
 		}
 	}
 }
 
-// get returns the cover at url, or nil while it loads.
+func (c *artCache) drop(key string) {
+	c.bytes -= c.art[key].cost
+	delete(c.art, key)
+}
+
+// trim applies both a decoded-memory LRU budget and a count bound (failed
+// URLs must not accumulate forever either). The just-published entry is
+// protected unless it alone exceeds the budget.
+func (c *artCache) trim(keep string) {
+	for len(c.art) > artEntries || c.bytes > c.budget {
+		oldest := ""
+		var used time.Time
+		found := false
+		for key, a := range c.art {
+			if key == keep && len(c.art) > 1 {
+				continue
+			}
+			if !found || a.used.Before(used) {
+				oldest, used, found = key, a.used, true
+			}
+		}
+		if !found {
+			return
+		}
+		c.drop(oldest)
+	}
+}
+
+// get preserves the provider's original URL, including signed query
+// parameters. It never appends provider-specific resizing parameters.
 func (c *artCache) get(url string, backdrop bool) *artwork {
-	if url == "" {
+	if url == "" || c.closed {
 		return nil
 	}
 	key := url
@@ -79,61 +178,118 @@ func (c *artCache) get(url string, backdrop bool) *artwork {
 	c.asked = now
 	if a, ok := c.art[key]; ok {
 		a.used = now
+		if a.bmp != nil && !a.release.IsZero() && !now.Before(a.release) {
+			// MyGo Bitmap.ReleasePixels must run on the drawing thread.
+			a.bmp.ReleasePixels()
+			a.release = time.Time{}
+		}
 		return a
 	}
-	if c.busy[key] {
+	if req := c.busy[key]; req != nil {
+		req.used = now
 		return nil
 	}
-	c.busy[key] = true
-	go func() {
-		c.sem <- struct{}{}
-		bmp, img, err := loadArt(url)
-		<-c.sem
-		var blurred *image.RGBA
-		var tint ui.Color
-		if err == nil {
-			tint = dominantColor(img)
-			if backdrop {
-				blurred = blurImage(img)
-			}
-		}
-		c.post(func() {
-			delete(c.busy, key)
-			if err != nil {
-				c.art[key] = &artwork{failed: true, used: c.now()}
-				return
-			}
-			a := &artwork{bmp: bmp, tint: tint, used: c.now()}
-			if blurred != nil {
-				a.backdrop = ui.NewBitmap(blurred)
-			}
-			c.art[key] = a
-			// Shown by the frame post draws, the cover drops its pixels,
-			// which its data decodes again if they are needed.
-			time.AfterFunc(artRelease, func() { mygo.RunOnMain(bmp.ReleasePixels) })
-		})
-	}()
+	if len(c.busy) >= artPending {
+		return nil // visible rows retry on the next completion/redraw
+	}
+	ctx, cancel := context.WithCancel(c.ctx)
+	req := &artRequest{key: key, url: url, backdrop: backdrop, used: now, ctx: ctx, cancel: cancel}
+	select {
+	case c.jobs <- req:
+		c.busy[key] = req
+	default:
+		cancel()
+	}
 	return nil
+}
+
+func (c *artCache) worker() {
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case req := <-c.jobs:
+			if req.ctx.Err() != nil {
+				continue
+			}
+			b, err := fetchArt(req.ctx, c.client, req.url)
+			var bmp *ui.Bitmap
+			var img image.Image
+			var blurred *image.RGBA
+			var tint ui.Color
+			if err == nil && req.ctx.Err() == nil {
+				bmp, img, err = decodeArt(b)
+			}
+			if err == nil && req.ctx.Err() == nil {
+				tint = dominantColor(img)
+				if req.backdrop {
+					blurred = blurImage(img)
+				}
+			}
+			if req.ctx.Err() != nil {
+				continue
+			}
+			c.post(func() {
+				if c.closed || req.ctx.Err() != nil || c.busy[req.key] != req {
+					return
+				}
+				delete(c.busy, req.key)
+				req.cancel()
+				a := &artwork{failed: err != nil, used: c.now()}
+				if err == nil {
+					a.bmp, a.tint, a.release = bmp, tint, c.now().Add(artRelease)
+					w, h := bmp.Size()
+					a.cost = int64(w)*int64(h)*12 + int64(len(b))
+					if blurred != nil {
+						a.backdrop = ui.NewBitmap(blurred)
+						a.cost += int64(len(blurred.Pix)) * 2
+					}
+				}
+				c.art[req.key] = a
+				c.bytes += a.cost
+				c.trim(req.key)
+			})
+		}
+	}
 }
 
 // artRelease is how long a cover keeps its pixels once loaded: past the
 // frame that first shows it, and the smaller copies it shows from there.
 const artRelease = 2 * time.Second
 
-// loadArt fetches the cover at url, as a bitmap to draw and an image to
-// measure.
-func loadArt(url string) (*ui.Bitmap, image.Image, error) {
-	b, err := netease.Fetch(url)
+func fetchArt(ctx context.Context, client *http.Client, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return decodeArt(b)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("artwork: HTTP %d", resp.StatusCode)
+	}
+	if resp.ContentLength > artMaxBytes {
+		return nil, errors.New("artwork: encoded image exceeds budget")
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, artMaxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > artMaxBytes {
+		return nil, errors.New("artwork: encoded image exceeds budget")
+	}
+	return b, nil
 }
 
 // decodeArt decodes a cover twice: as a bitmap, which keeps the data to
 // decode its pixels again after it drops them, and as an image.
 func decodeArt(b []byte) (*ui.Bitmap, image.Image, error) {
 	b = stillCover(b)
+	if err := checkArtSize(b); err != nil {
+		return nil, nil, err
+	}
 	img, _, err := image.Decode(bytes.NewReader(b))
 	if err != nil {
 		return nil, nil, err
@@ -143,15 +299,32 @@ func decodeArt(b []byte) (*ui.Bitmap, image.Image, error) {
 }
 
 func fetchImage(url string) (image.Image, error) {
-	b, err := netease.Fetch(url)
+	client := newArtClient()
+	defer client.CloseIdleConnections()
+	b, err := fetchArt(context.Background(), client, url)
 	if err != nil {
 		return nil, err
 	}
 	return decodeImage(b)
 }
 
+func checkArtSize(b []byte) error {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > artMaxPixels {
+		return errors.New("artwork: decoded image exceeds budget")
+	}
+	return nil
+}
+
 func decodeImage(b []byte) (image.Image, error) {
-	img, _, err := image.Decode(bytes.NewReader(stillCover(b)))
+	b = stillCover(b)
+	if err := checkArtSize(b); err != nil {
+		return nil, err
+	}
+	img, _, err := image.Decode(bytes.NewReader(b))
 	return img, err
 }
 

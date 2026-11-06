@@ -137,8 +137,7 @@ func TestStageStyleRegistry(t *testing.T) {
 
 // Every backdrop the settings can name is one the player has, and a name
 // this version does not know is the still one: a settings file outlives
-// the version that wrote it. The old Fog switch carries over to the
-// backdrop it chose.
+// the version that wrote it.
 func TestBackdropStyles(t *testing.T) {
 	seen := map[string]bool{}
 	for _, b := range backdropStyles {
@@ -160,35 +159,4 @@ func TestBackdropStyles(t *testing.T) {
 		t.Errorf("a backdrop this version does not have gives %q", got.id)
 	}
 
-	// A settings file of the Fog switch's time keeps the fog it chose, and
-	// one that names a backdrop keeps that, whatever the switch says. A
-	// file that names neither is one from before there was a choice, and
-	// takes the backdrop the app starts with.
-	for _, c := range []struct {
-		fog, fogSet, backdropSet bool
-		name, want               string
-	}{
-		{true, true, false, "", "fog"},       // the switch was on
-		{false, true, false, "", "latent"},   // the switch was off, so the default
-		{true, true, true, "latent", "latent"}, // a named backdrop wins
-		{true, true, true, "partita", "partita"}, // a backdrop named wins
-		{false, false, true, "fog", "fog"},   // named, switch never written
-		{false, false, false, "", "latent"},  // neither: a file from before
-	} {
-		s := defaultSettings()
-		s.Fog, s.fogSet, s.backdropSet = c.fog, c.fogSet, c.backdropSet
-		if c.name != "" {
-			s.Backdrop = c.name
-		}
-		s.migrateFog()
-		if s.Backdrop != c.want {
-			t.Errorf("fog=%v fogSet=%v backdropSet=%v name=%q: migrated to %q, want %q",
-				c.fog, c.fogSet, c.backdropSet, c.name, s.Backdrop, c.want)
-		}
-	}
-	// A new install takes 隐现 and the automatic curve.
-	n := defaultSettings()
-	if n.Backdrop != "latent" || !n.BackdropPatches || !n.Equalizer || n.EQPreset != "auto" {
-		t.Errorf("a new install: backdrop %q, patches %v, equalizer %v, curve %q", n.Backdrop, n.BackdropPatches, n.Equalizer, n.EQPreset)
-	}
 }

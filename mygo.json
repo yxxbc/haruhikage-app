@@ -1,20 +1,15 @@
 {
-  "name": "春日影",
-  "identifier": "dev.yxxbc.haruhikage",
-  "slug": "haruhikage-app",
-  "version": "0.1.25",
+  "name": "春日影 LX",
+  "identifier": "com.cxer1001.haruhikage.sources",
+  "slug": "haruhikage-lx",
+  "version": "0.2.0",
   "out": "build",
-  "updates": {
-    "publicKey": "B2ClDpOtADuBgvwV3kBnQsQzOR5Cv6dSm3zWcZ/oTwM=",
-    "github": "yxxbc/haruhikage-app",
-    "privateKey": "keys/mygo-update.key"
-  },
   "macos": {
     "icon": "icon/AppIcon.icon",
     "minimumSystemVersion": "13.0"
   },
   "linux": {
-    "comment": "跨平台音乐播放器",
+    "comment": "本地资料库与自管音源音乐播放器",
     "categories": ["AudioVideo", "Audio", "Player"],
     "webview": false
   }

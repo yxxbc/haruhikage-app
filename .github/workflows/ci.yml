@@ -1,0 +1,71 @@
+name: Build Windows installer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Download modules
+        run: go mod download
+      - name: Verify module files
+        run: go mod tidy && git diff --exit-code -- go.mod go.sum
+      - name: Test
+        run: go test ./... -count=1
+      - name: Repeat UI tests
+        run: go test ./internal/app -count=5
+      - name: Race-check core services
+        run: go test -race ./internal/catalog ./internal/catalogbrowse ./internal/library ./internal/player ./internal/source ./internal/sourcehost
+      - name: Vet MyGo lifetime usage
+        run: go tool mygo vet .
+
+  package-windows:
+    name: Package Windows x64
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Install NSIS
+        run: sudo apt-get update && sudo apt-get install -y nsis zip unzip
+      - name: Build isolated source host
+        run: |
+          mkdir -p resources/windows-amd64
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags='-s -w -H=windowsgui' -o resources/windows-amd64/source-host.exe ./cmd/source-host
+      - name: Build installer
+        run: go tool mygo build -platform windows/amd64
+      - name: Verify and create portable package
+        run: |
+          test -f "build/windows-amd64/春日影 LX.exe"
+          test -f build/windows-amd64/haruhikage-lx-setup-0.2.0-amd64.exe
+          test -f build/windows-amd64/source-host.exe
+          mkdir -p portable/春日影-LX
+          cp "build/windows-amd64/春日影 LX.exe" build/windows-amd64/source-host.exe portable/春日影-LX/
+          (cd portable && zip -r "../build/windows-amd64/haruhikage-lx-0.2.0-windows-amd64.zip" 春日影-LX)
+          unzip -l build/windows-amd64/haruhikage-lx-0.2.0-windows-amd64.zip | grep -F 'source-host.exe'
+          sha256sum build/windows-amd64/*.exe build/windows-amd64/*.zip > build/windows-amd64/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: haruhikage-lx-windows-x64
+          path: |
+            build/windows-amd64/*.exe
+            build/windows-amd64/*.zip
+            build/windows-amd64/SHA256SUMS.txt
+          if-no-files-found: error

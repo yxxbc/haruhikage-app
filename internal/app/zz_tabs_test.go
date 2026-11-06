@@ -1,28 +1,37 @@
 package app
 
 import (
+	"image/png"
+	"os"
+	"path/filepath"
 	"testing"
-
-	"github.com/egoist/mygo/ui"
 )
 
+// NM_FRAMES captures the existing pane layouts for visual inspection rather than asserting label positions.
 func TestTabsPlace(t *testing.T) {
-	const w, h = 1180, 780
+	dir := os.Getenv("NM_FRAMES")
+	if dir == "" {
+		t.Skip("set NM_FRAMES to inspect pane placement")
+	}
 	for _, p := range []struct {
 		name string
 		pane int
-	}{{"歌词", paneLyrics}, {"律动", paneStage}, {"待播清单", paneQueue}} {
+	}{{"lyrics", paneLyrics}, {"stage", paneStage}, {"queue", paneQueue}, {"wall", paneWall}} {
 		a, tt, _ := playingApp()
-		a.nowPlaying = true
-		a.npPane = p.pane
+		a.nowPlaying, a.npPane = true, p.pane
 		tt.Frame()
 		tt.Frame()
-		r, ok := tt.Find("评论")
-		if !ok {
-			t.Logf("%s: no 评论 tab", p.name)
-			continue
+		f, err := os.Create(filepath.Join(dir, "tabs-"+p.name+".png"))
+		if err != nil {
+			t.Fatal(err)
 		}
-		t.Logf("%s: 评论 tab x=%.1f..%.1f (window %d)", p.name, r.X, r.X+r.W, w)
-		_ = ui.Rect{}
+		err = png.Encode(f, tt.Image())
+		closeErr := f.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if closeErr != nil {
+			t.Fatal(closeErr)
+		}
 	}
 }

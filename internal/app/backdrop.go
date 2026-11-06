@@ -127,7 +127,7 @@ type backdropCache struct {
 func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 	pl := a.pl
 	style := backdropStyleByID(a.settings.Backdrop)
-	fog, still := style.moves, c.Preferences().ReduceMotion
+	fog, still := style.moves, !a.visualActive || c.Preferences().ReduceMotion
 	ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).PassThrough().Draw(func(p *ui.Painter, r ui.Rect) {
 		// A backdrop that moves is painted at the window's own resolution:
 		// anything coarser would stretch its dither into visible tiles on
@@ -152,7 +152,14 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 		}
 		moving := fog && gpu && !still
 		lv, live := pl.Levels()
-		moved := bd.step(now, pl.Playing() && moving, lv, live && moving)
+		moved := false
+		if moving {
+			moved = bd.step(now, pl.Playing(), lv, live)
+		} else {
+			// Visibility/ReduceMotion is a hard stop, not the pause tail.
+			// Resume from this instant instead of integrating hidden time.
+			bd.last, bd.speed, bd.level = now, 0, barState{}
+		}
 		due := now.Sub(bd.at) >= backdropFrame-2*time.Millisecond
 		if bd.canvas == nil || bd.art != art || bd.tint != tint || bd.fog != fog ||
 			bd.patches != a.settings.BackdropPatches || moved && due {
@@ -179,7 +186,7 @@ func (a *app) backdrop(c *ui.Context, art *artwork, tint ui.Color) {
 			}}, 0)
 		}
 		if bd.before != nil {
-			if k := float32(now.Sub(bd.fadeAt)) / float32(backdropFade); k < 1 {
+			if k := float32(now.Sub(bd.fadeAt)) / float32(backdropFade); k < 1 && !still {
 				// Eased out, as it fades.
 				k = 1 - (1-k)*(1-k)*(1-k)
 				p.ImageRegion(bd.before.Bitmap(), ui.Rect{}, r, ui.ImageOptions{Tint: white.Alpha(1 - k)})

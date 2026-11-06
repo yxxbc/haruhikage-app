@@ -7,27 +7,23 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 )
 
-// The page under Now Playing is not built while Now Playing covers it, and
-// shows again where it was scrolled once Now Playing closes.
+// A covered library page is not built, and closing Now Playing restores its scroll position.
 func TestCoveredPageKeepsItsPlace(t *testing.T) {
-	a := newTestApp()
-	a.settings = defaultSettings()
-	tracks := make([]netease.Track, 200)
-	for i := range tracks {
-		tracks[i] = netease.Track{ID: int64(i + 1), Name: fmt.Sprintf("曲目%d", i+1)}
-	}
-	a.playlists[42] = &netease.Playlist{ID: 42, Name: "飙升榜", Tracks: tracks}
-	for i := range 40 {
-		a.charts = append(a.charts, netease.Playlist{ID: int64(100 + i), Name: fmt.Sprintf("榜单%d", i+1)})
-	}
-	a.pl.Cue([]netease.Track{{ID: 9999, Name: "一张相片"}})
-	tt := ui.NewTester(a.view, 1200, 800)
-
-	for _, r := range []route{{page: pagePlaylist, id: 42}, {page: pageCharts}} {
-		a.open(r)
+	for _, r := range []route{{page: pageFavorites}, {page: pageHome}} {
+		a := newTestApp()
+		a.settings = defaultSettings()
+		a.route = r
+		for i := range 200 {
+			a.tracks = append(a.tracks, domain.Track{Provider: "wy", ID: fmt.Sprint(i + 1), Name: fmt.Sprintf("曲目%d", i+1)})
+		}
+		for i := range 40 {
+			a.mine = append(a.mine, domain.Playlist{ID: fmt.Sprint(100 + i), Name: fmt.Sprintf("歌单%d", i+1)})
+		}
+		a.pl.Cue([]domain.Track{{Provider: "wy", ID: "9999", Name: "一张相片"}})
+		tt := ui.NewTester(a.view, 1200, 800)
 		tt.Frame()
 		tt.Wheel(700, 400, 0, 2400)
 		tt.Advance(time.Second)
@@ -38,7 +34,7 @@ func TestCoveredPageKeepsItsPlace(t *testing.T) {
 		tt.Frame()
 		tt.Advance(time.Second)
 		tt.Frame()
-		if tt.HasText("为你推荐") {
+		if _, ok := tt.Find("搜索歌曲"); ok {
 			t.Errorf("%+v: the sidebar is built under Now Playing", r)
 		}
 
@@ -55,7 +51,7 @@ func TestCoveredPageKeepsItsPlace(t *testing.T) {
 	}
 }
 
-// shown returns the texts the window shows, each where it is.
+// shown returns visible text and committed geometry for scroll restoration checks.
 func shown(tt *ui.Tester) string {
 	var s string
 	for _, text := range tt.Texts() {
@@ -66,10 +62,10 @@ func shown(tt *ui.Tester) string {
 	return s
 }
 
-// firstShown returns what a's page shows unscrolled.
+// firstShown returns the same page without a retained scrolling offset.
 func firstShown(a *app) string {
 	b := *a
-	b.trackList, b.pageScroll = ui.ListState{}, ui.ScrollState{}
+	b.trackList, b.pageScroll, b.navScroll = ui.ListState{}, ui.ScrollState{}, ui.ScrollState{}
 	tt := ui.NewTester(b.view, 1200, 800)
 	tt.Frame()
 	return shown(tt)

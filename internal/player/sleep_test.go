@@ -87,6 +87,32 @@ func TestSleepTimer(t *testing.T) {
 	}
 }
 
+// An already queued timer callback cannot pause or clear its replacement.
+// Stopping the timer alone used to leave this main-thread callback alive.
+func TestSleepQueuedCallbackEpoch(t *testing.T) {
+	c := &fakeClock{now: time.Unix(1_700_000_000, 0)}
+	c.install(t)
+	var posts []func()
+	p := New(func(fn func()) { posts = append(posts, fn) })
+	defer p.Close()
+	p.Hold(0)
+	p.SetSleep(time.Minute)
+	c.advance(time.Minute)
+	if len(posts) != 1 {
+		t.Fatal("timer did not enqueue")
+	}
+	p.SetSleep(30 * time.Minute)
+	posts[0]()
+	if _, left := p.Sleeping(); left != 30 || !p.Playing() {
+		t.Fatal("old callback replaced the new sleep or paused playback")
+	}
+	p.CancelSleep()
+	posts[0]()
+	if !p.Playing() {
+		t.Fatal("canceled callback paused playback")
+	}
+}
+
 // A sleep set to stop with the track playing does, whatever the repeat
 // mode, and is gone once it has: the next track plays as it would.
 func TestSleepAtEnd(t *testing.T) {

@@ -14,6 +14,7 @@ var (
 
 // sleep ends playback after a while, or when the track playing ends.
 type sleep struct {
+	epoch uint64
 	timer stopper
 	// atEnd stops playback when the current track ends, rather than at a
 	// deadline: the listener may pick another song before it does.
@@ -26,12 +27,16 @@ type sleep struct {
 // less cancels it, as CancelSleep does.
 func (p *Player) SetSleep(d time.Duration) {
 	p.CancelSleep()
-	if d <= 0 {
+	if d <= 0 || p.closed {
 		return
 	}
 	p.sleep.until = sleepNow().Add(d)
+	epoch := p.sleep.epoch
 	p.sleep.timer = sleepAfter(d, func() {
 		p.post(func() {
+			if p.closed || epoch != p.sleep.epoch {
+				return
+			}
 			// Nothing is left of it: the menu shows it gone, and the next
 			// track plays as it would.
 			p.sleep.until, p.sleep.timer = time.Time{}, nil
@@ -39,18 +44,22 @@ func (p *Player) SetSleep(d time.Duration) {
 			if p.Changed != nil {
 				p.Changed()
 			}
-		})	})
+		})
+	})
 }
 
 // SetSleepAtEnd stops playback when the track playing ends, rather than
 // playing the next.
 func (p *Player) SetSleepAtEnd() {
 	p.CancelSleep()
-	p.sleep.atEnd = true
+	if !p.closed {
+		p.sleep.atEnd = true
+	}
 }
 
 // CancelSleep ends a sleep timer set, if any.
 func (p *Player) CancelSleep() {
+	p.sleep.epoch++
 	if p.sleep.timer != nil {
 		p.sleep.timer.Stop()
 		p.sleep.timer = nil

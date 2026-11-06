@@ -1,6 +1,8 @@
 package player
 
 import (
+	"context"
+	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -8,9 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
-	"time"
 
-	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 )
 
 func TestFrameSize(t *testing.T) {
@@ -71,21 +72,9 @@ func TestMP3SeekIsClean(t *testing.T) {
 			t.Fatal(err)
 		}
 		n, _ := s.Read(buf)
-		// Where the decoder started, counted in MP3 frames from the first,
-		// and what it played from there on.
-		var at int64
-		if from := frame - preroll; from > 0 {
-			off := s.start + int64(float64(dl.size-s.start)*float64(from)/float64(s.frames))
-			off = findFrame(dl, off)
-			k := int64(0)
-			for p := s.start; p < off; p += int64(frameSize(dl.peek(p, 4))) {
-				k++
-			}
-			at = (k*1152 + preroll) * 2
-		} else {
-			at = frame * 2
-		}
-		if d := maxDiff(buf[:n], ref[at:]); d > 1e-4 {
+		// Regression: byte ratios drifted on VBR. Count actual frames and
+		// compare against the requested decoded sample, not an estimate.
+		if d := maxDiff(buf[:n], ref[frame*2:]); d > 1e-4 {
 			t.Errorf("seek to frame %d: off by up to %.3f", frame, d)
 		}
 	}
@@ -187,8 +176,9 @@ func TestStreamIntoCache(t *testing.T) {
 	c := NewCache(dir, 1<<30)
 	ref := decodeAll(t, b)
 
-	st := &netease.Stream{URL: srv.URL + "/whole", Size: int64(len(b)), Level: "exhigh", Type: "mp3"}
-	s, err := openStream(c.download(1, st), int64(len(ref)/2)*1000/44100)
+	st := &domain.Stream{URL: srv.URL + "/whole", Size: int64(len(b)), Level: "320k", SourceID: "test", SourceRevision: "1"}
+	download := c.download(context.Background(), track("1"), st, "320k")
+	s, err := openStream(download, int64(len(ref)/2)*1000/44100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,27 +192,24 @@ func TestStreamIntoCache(t *testing.T) {
 		}
 	}
 	s.Close()
+	<-download.released
 	if d := maxDiff(got, ref); len(got) != len(ref) || d != 0 {
 		t.Errorf("played %d of %d samples, off by up to %.4f", len(got), len(ref), d)
 	}
-	if dl, _, ok := c.lookup(1, "exhigh"); !ok {
+	if dl, _, ok := c.lookup(track("1"), st, "320k"); !ok {
 		t.Error("not kept")
 	} else {
 		dl.Close()
 	}
 
-	cut := c.download(2, &netease.Stream{URL: srv.URL + "/cut", Size: int64(len(b)), Level: "exhigh", Type: "mp3"})
+	cut := c.download(context.Background(), track("2"), &domain.Stream{URL: srv.URL + "/cut", Size: int64(len(b)), Level: "320k", SourceID: "test", SourceRevision: "1"}, "320k")
 	cut.waitFor(int64(len(b) / 2))
 	cut.Close()
-	for start := time.Now(); time.Since(start) < 2*time.Second; time.Sleep(10 * time.Millisecond) {
-		if parts, _ := filepath.Glob(filepath.Join(dir, "*.part")); len(parts) == 0 {
-			break
-		}
-	}
+	<-cut.released
 	if parts, _ := filepath.Glob(filepath.Join(dir, "*.part")); len(parts) != 0 {
 		t.Errorf("left %v", parts)
 	}
-	if _, _, ok := c.lookup(2, "exhigh"); ok {
+	if _, _, ok := c.lookup(track("2"), st, "320k"); ok {
 		t.Error("kept a song cut short")
 	}
 }
@@ -252,7 +239,8 @@ func TestSharedStream(t *testing.T) {
 		}
 	}
 
-	dl := c.download(1, &netease.Stream{URL: srv.URL, Size: int64(len(b)), Level: "exhigh", Type: "mp3"})
+	st := &domain.Stream{URL: srv.URL, Size: int64(len(b)), Level: "320k", SourceID: "test", SourceRevision: "1"}
+	dl := c.download(context.Background(), track("1"), st, "320k")
 	playing, err := openStream(dl, ms)
 	if err != nil {
 		t.Fatal(err)
@@ -266,8 +254,9 @@ func TestSharedStream(t *testing.T) {
 		t.Errorf("played %d of %d samples after the second stream closed", len(got), len(ref))
 	}
 	playing.Close()
+	<-dl.released
 
-	kept, _, ok := c.lookup(1, "exhigh")
+	kept, _, ok := c.lookup(track("1"), st, "320k")
 	if !ok {
 		t.Fatal("not kept")
 	}
@@ -286,10 +275,8 @@ func TestSharedStream(t *testing.T) {
 	}
 }
 
-// A stream whose level would lead out of the cache's folder is played but
-// not kept. The level named the file, taken as the API sent it, so a level
-// of "/../../x" wrote the song and its JSON beside the cache instead.
-func TestCacheKeepsOnlyKnownLevels(t *testing.T) {
+// Rendition strings are opaque hashed identities, never filesystem paths.
+func TestCacheKeyCannotEscapeDirectory(t *testing.T) {
 	b, err := os.ReadFile("testdata/seek.mp3")
 	if err != nil {
 		t.Fatal(err)
@@ -300,14 +287,24 @@ func TestCacheKeepsOnlyKnownLevels(t *testing.T) {
 	dir := filepath.Join(root, "cache")
 	c := NewCache(dir, 1<<30)
 
-	dl := c.download(1, &netease.Stream{URL: srv.URL, Size: int64(len(b)), Level: "/../../pwned", Type: "mp3"})
-	dl.waitFor(int64(len(b)))
-	dl.Close()
-	for start := time.Now(); time.Since(start) < 2*time.Second; time.Sleep(10 * time.Millisecond) {
-		if parts, _ := filepath.Glob(filepath.Join(dir, "*.part")); len(parts) == 0 {
+	st := &domain.Stream{URL: srv.URL, Size: -1, Level: "/../../pwned", SourceID: "../../source", SourceRevision: "../revision"}
+	dl := c.download(context.Background(), track("../../song"), st, "/../../pwned")
+	s, err := openStream(dl, 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]float32, 4096)
+	for {
+		_, err := s.Read(buf)
+		if err != nil {
+			if err != io.EOF {
+				t.Fatal(err)
+			}
 			break
 		}
 	}
+	_ = s.Close()
+	<-dl.released
 	var outside []string
 	filepath.WalkDir(root, func(path string, e os.DirEntry, err error) error {
 		if err == nil && !e.IsDir() && filepath.Dir(path) != dir {
@@ -318,22 +315,26 @@ func TestCacheKeepsOnlyKnownLevels(t *testing.T) {
 	if len(outside) != 0 {
 		t.Errorf("wrote %v outside the cache", outside)
 	}
-	if songs := c.songs(); len(songs) != 0 {
-		t.Errorf("kept %v", songs)
+	if songs := c.songs(); len(songs) != 1 {
+		t.Errorf("valid audio not kept with opaque key: %v", songs)
 	}
 }
 
-// A song the cache won't keep sets aside no more memory than maxPrealloc,
-// whatever size the API says it is, which it set aside in full before.
+// An untrusted resolver size cannot allocate RAM or override HTTP length.
 func TestStreamSizeIsNotTrusted(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("short")) }))
 	defer srv.Close()
-	dl := startDownload(srv.URL, 1<<40, nil, nil)
+	dl := startDownload(context.Background(), &domain.Stream{URL: srv.URL, Size: 1 << 40}, nil)
 	defer dl.Close()
 	dl.mu.Lock()
 	n := cap(dl.data)
 	dl.mu.Unlock()
-	if n > maxPrealloc {
-		t.Errorf("set aside %d bytes", n)
+	if n != 0 {
+		t.Errorf("allocated %d network audio bytes in RAM", n)
+	}
+	dl.waitFor(math.MaxInt64)
+	_, size, _, err := dl.snapshot()
+	if size != 5 || err != nil {
+		t.Fatalf("HTTP length: size %d, error %v", size, err)
 	}
 }

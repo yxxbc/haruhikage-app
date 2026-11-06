@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"sync"
+	"time"
 
 	"github.com/mewkiz/flac"
 	"github.com/mewkiz/flac/frame"
@@ -41,9 +42,12 @@ func openFLACStream(dl *download) (*flacStream, error) {
 		return nil, err
 	}
 	s := &flacStream{dl: dl, info: st.Info, start: start, drop: dl.Close}
-	if s.info.NChannels == 0 || s.info.SampleRate == 0 {
+	if s.info == nil || s.info.NChannels == 0 || s.info.SampleRate == 0 || s.info.BitsPerSample == 0 || s.info.BitsPerSample > 32 {
 		return nil, errors.New("flac: no stream info")
 	}
+	dl.mu.Lock()
+	dl.codec = "flac"
+	dl.mu.Unlock()
 	s.spec = newSpectrum(int(s.info.SampleRate), int64(s.info.NSamples))
 	s.r = bufio.NewReaderSize(&downloadReader{d: dl, pos: start}, 64<<10)
 	return s, nil
@@ -62,8 +66,14 @@ func flacDataStart(dl *download) (int64, error) {
 			return 0, io.ErrUnexpectedEOF
 		}
 		h := dl.peek(off, 4)
+		if len(h) < 4 {
+			return 0, io.ErrUnexpectedEOF
+		}
 		last := h[0]&0x80 != 0
 		off += 4 + (int64(h[1])<<16 | int64(h[2])<<8 | int64(h[3]))
+		if off > maxMetadataBytes {
+			return 0, errors.New("flac: metadata exceeds limit")
+		}
 		if last {
 			if dl.waitFor(off) < off {
 				return 0, io.ErrUnexpectedEOF
@@ -85,8 +95,15 @@ func (s *flacStream) Len() int64 {
 
 // parse parses the frame r is at: its header, then its samples, taking
 // what the header leaves to the stream info from there.
-func (s *flacStream) parse(r io.Reader) (*frame.Frame, error) {
-	f, err := frame.New(r)
+func (s *flacStream) parse(r io.Reader) (f *frame.Frame, err error) {
+	// The dependency may panic on corrupt subframe/header combinations.
+	// Treat malformed media as a decoder failure, not a process crash.
+	defer func() {
+		if recover() != nil {
+			f, err = nil, errors.New("flac: corrupt frame")
+		}
+	}()
+	f, err = frame.New(r)
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +123,13 @@ func (s *flacStream) Read(dst []float32) (int, error) {
 	for len(s.pend) == 0 {
 		f, err := s.parse(s.r)
 		if err != nil {
-			if err == io.ErrUnexpectedEOF {
-				err = io.EOF
+			if err == io.EOF && (s.info.NSamples == 0 || s.pos >= int64(s.info.NSamples)) {
+				err = s.dl.decoderEOF()
+			} else {
+				if err == io.EOF {
+					err = io.ErrUnexpectedEOF
+				}
+				s.dl.reject(err)
 			}
 			return 0, err
 		}
@@ -149,16 +171,54 @@ func (s *flacStream) decode(f *frame.Frame) {
 // guessing where in the bytes it is from the frames found on either side,
 // until one is found less than a second before it.
 func (s *flacStream) SetPosition(target int64) error {
+	target = max(target, 0)
+	deadline := time.Now().Add(seekBudget)
 	total := int64(s.info.NSamples)
-	size := s.dl.size
-	if size <= 0 {
-		size = s.dl.waitFor(math.MaxInt64)
+	if total > 0 {
+		target = min(target, total)
+	}
+	_, size, done, downloadErr := s.dl.snapshot()
+	if downloadErr != nil {
+		return downloadErr
+	}
+	if !done || size <= 0 || total <= 0 {
+		// Unknown/partial length cannot be used as a byte/time ratio.
+		// Scan actual frames on MyGo's decode worker, within one budget.
+		raw := &downloadReader{d: s.dl, pos: s.start, deadline: deadline}
+		r := bufio.NewReaderSize(raw, 64<<10)
+		at := int64(0)
+		for {
+			if !time.Now().Before(deadline) {
+				return ErrSeekUnavailable
+			}
+			f, err := s.parse(r)
+			if err != nil {
+				return err
+			}
+			n := int64(f.BlockSize)
+			if at+n > target {
+				s.pos, s.skip, s.pend = target, target-at, s.pend[:0]
+				s.decode(f)
+				raw.deadline = time.Time{}
+				s.r = r
+				return nil
+			}
+			at += n
+			if at == target {
+				raw.deadline = time.Time{}
+				s.r, s.pos, s.skip, s.pend = r, target, 0, s.pend[:0]
+				return nil
+			}
+		}
 	}
 	loOff, lo := s.start, int64(0)
 	hiOff, hi := size, total
 	for tries := 0; tries < 8 && target-lo > int64(s.info.SampleRate) && hi > lo; tries++ {
 		guess := loOff + int64(float64(hiOff-loOff)*float64(target-lo)/float64(hi-lo))
-		off, at, ok := s.frameAfter(max(guess, loOff+1), hiOff)
+		if !time.Now().Before(deadline) {
+			return ErrSeekUnavailable
+		}
+		off, at, ok := s.frameAfter(max(guess, loOff+1), hiOff, deadline)
 		if !ok {
 			break
 		}
@@ -176,17 +236,23 @@ func (s *flacStream) SetPosition(target int64) error {
 // frameAfter returns where the first whole frame at or after off and
 // before end starts, and the frame of sound it starts with. Bytes that
 // only look like a frame's header within the audio fail its checksums.
-func (s *flacStream) frameAfter(off, end int64) (int64, int64, bool) {
+func (s *flacStream) frameAfter(off, end int64, deadline time.Time) (int64, int64, bool) {
 	w := window{dl: s.dl}
 	for ; off+2 < end; off++ {
-		if s.dl.waitFor(off+2) < off+2 {
+		if !time.Now().Before(deadline) {
+			return 0, 0, false
+		}
+		if n, err := s.dl.waitUntil(off+2, deadline); err != nil || n < off+2 {
 			return 0, 0, false
 		}
 		b := w.at(off, 2)
+		if len(b) < 2 {
+			return 0, 0, false
+		}
 		if b[0] != 0xff || b[1]&0xfe != 0xf8 {
 			continue
 		}
-		if at, ok := s.frameAt(off); ok {
+		if at, ok := s.frameAt(off, deadline); ok {
 			return off, at, true
 		}
 	}
@@ -196,13 +262,13 @@ func (s *flacStream) frameAfter(off, end int64) (int64, int64, bool) {
 // frameAt returns the frame of sound the frame of FLAC at off starts with,
 // if a whole one is there. The decoder may panic on bytes that only
 // passed the header's checksum.
-func (s *flacStream) frameAt(off int64) (at int64, ok bool) {
+func (s *flacStream) frameAt(off int64, deadline time.Time) (at int64, ok bool) {
 	defer func() {
 		if recover() != nil {
 			ok = false
 		}
 	}()
-	f, err := s.parse(bufio.NewReaderSize(&downloadReader{d: s.dl, pos: off}, 16<<10))
+	f, err := s.parse(bufio.NewReaderSize(&downloadReader{d: s.dl, pos: off, deadline: deadline}, 16<<10))
 	if err != nil || f.Channels.Count() != int(s.info.NChannels) {
 		return 0, false
 	}

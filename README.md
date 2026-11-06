@@ -1,67 +1,41 @@
 <p align="center">
-<a href="resources/icon.png"><img src="resources/icon.png" width="80" alt="正在播放：逐字歌词与翻译"></a><br>
-<sub></sub>
+<img src="resources/icon.png" width="80" alt="春日影 LX">
 </p>
-<h1 align="center">春日影</h1>
+<h1 align="center">春日影 LX</h1>
 
-<p align="center">
-用 Go 和 <a href="https://github.com/egoist/mygo">MyGo</a> 写的跨平台音乐播放器，原生界面，无 WebView。
-</p>
-
-<p align="center">
-<a href="https://awesomemygo.dev/apps/haruhikage-app"><img src="https://awesomemygo.dev/badge.svg" alt="Listed on Awesome MyGo"></a>
-</p>
-
-## 赞助说明
-请联系: xynrin@icloud.com
-
-## 界面
-
-![主界面：推荐、每日推荐与收藏的歌单](image/home.png)
-
-<p align="center"><sub>主界面 · 推荐、每日推荐与收藏的歌单</sub></p>
-
-| 待播清单 | 选歌 |
-| :---: | :---: |
-| ![待播清单：队列里的歌，随时切换](image/now-playing-picker.png) | ![选歌：在封面墙里挑下一首](image/now-playing-queue.png) |
-| <sub>队列里的歌，随时切换</sub> | <sub>在封面墙里挑下一首</sub> |
-
+<p align="center">Go + MyGo 原生音乐播放器，使用本地资料库和用户自己管理的 LX JavaScript 音源。</p>
 
 ## 功能
 
-- 推荐、歌单、排行榜与我的收藏
-- 搜索单曲、歌手、专辑、用户与播客，输入时显示搜索建议，保留搜索历史
-- 歌手页的热门与最新歌曲、专辑与动态，关注歌手；专辑页与用户页
-- 播客：浏览与收听节目，订阅播客；在本机把节目转写成字幕（Qwen3-ASR），像歌词一样随播放滚动
-- 连续播放（推荐 / 熟悉 / 探索）与心动模式
-- 边下边播，支持标准 / 较高 / 极高 / 无损（FLAC）/ Hi-Res 音质
-- 听过的歌曲缓存在本机，再次播放无需等待
-- 音量均衡，暂停与继续时淡出淡入，拖动进度无杂音
-- 退出后再打开，从上次的播放队列与进度继续
-- 逐字歌词与翻译，正在播放页的「律动」视图与歌曲评论
-- 刘海播放器：在屏幕顶部刘海处显示迷你播放器，悬停展开（在设置中开启）
-- 喜欢歌曲、播放队列、随机与循环播放
-- 浅色 / 深色 / 跟随系统
+- 网易云、QQ 音乐、酷狗、酷我、咪咕的匿名搜索与歌词适配
+- 导入、检查、替换、启用和导出 LX JavaScript 播放音源
+- 本地喜欢、歌单、播放历史、播放队列和退出后会话恢复
+- 资料库 JSON 备份与恢复；音源脚本和凭证只保存在本机
+- 边下边播、有限缓存、音量均衡、均衡器、睡眠定时和歌词滚动
+- 浅色 / 深色 / 跟随系统；减少动态效果和后台停帧
+- 无登录、无账号同步、无云端收藏；不自动上传音源脚本或 Key
 
+曲库检索和播放地址解析是两个独立层：平台只负责搜索、歌词和元数据，播放地址由你导入的音源脚本解析。脚本仅提供播放地址时，文件长度、格式和响度等字段由宿主根据真实解析结果填写，不能保证每首歌都能播放。
 
+## 使用
+
+1. 从“音源管理”导入你的 `.js` LX 音源。
+2. 将通过检查的音源设为当前音源。
+3. 在搜索框查找歌曲并播放。
+4. 喜欢、歌单和历史直接保存在本机；可以在首页或设置中导入/导出资料库备份。
+
+不要把含有付费凭证的音源脚本提交到 GitHub、截图或公开分享。项目测试使用的是脱敏 fixture，不调用真实付费接口。
 
 ## 构建
 
-需要 Go 1.27+。
+需要 Go 1.27.3 或兼容版本。开发运行：
 
 ```bash
-go tool mygo dev     # 开发模式运行
-go tool mygo build   # 打包到 build/
-go test ./...        # 运行测试
+go tool mygo dev
+go test ./...
 ```
 
-## 致谢
-
-- [MyGo](https://github.com/egoist/mygo)：原生 UI 与应用框架
-- [folia-major](https://github.com/chthollyphile/folia-major)：歌词动画效果的参考
-- [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)、[Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) 与 [Silero VAD](https://github.com/snakers4/silero-vad)：本机语音识别
-
-音乐与节目内容的版权归各权利人所有。
+推送到 `main` 或手动运行 GitHub Actions 的 `Build Windows installer` 工作流，会在测试通过后生成 Windows x64 安装包、便携 ZIP 和 SHA256 校验文件。安装包已经包含 `source-host.exe`，不需要另装 Node.js 或 Go。
 
 ## 许可证
 

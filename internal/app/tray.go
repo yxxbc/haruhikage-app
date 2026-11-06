@@ -122,7 +122,6 @@ func (a *app) trayMenu() *mygo.Menu {
 		{Label: "喜欢/取消喜欢", Click: run(a.likeCurrent)},
 		mygo.Separator(),
 		{Label: "设置…", Click: run(front(a.openSettings))},
-		{Label: "检查更新…", Click: run(front(checkForUpdates))},
 		mygo.Separator(),
 		{Label: "退出" + name, Click: func(*mygo.MenuItem, *mygo.Window) { mygo.App.Quit() }},
 	})

@@ -46,21 +46,21 @@ func (f *biquad) set(shape bandShape, freq, rate, gainDB, q float64) {
 	case lowShelf:
 		// The cookbook's shelf, which needs the square root of a.
 		s := 2 * math.Sqrt(a) * alpha
-		f.b0 = a * ((a+1) - (a-1)*cos + s)
-		f.b1 = 2 * a * ((a-1) - (a+1)*cos)
-		f.b2 = a * ((a+1) - (a-1)*cos - s)
-		f.a1 = -2 * ((a-1) + (a+1)*cos)
-		f.a2 = (a+1) + (a-1)*cos - s
-		a0 := (a+1) + (a-1)*cos + s
+		f.b0 = a * ((a + 1) - (a-1)*cos + s)
+		f.b1 = 2 * a * ((a - 1) - (a+1)*cos)
+		f.b2 = a * ((a + 1) - (a-1)*cos - s)
+		f.a1 = -2 * ((a - 1) + (a+1)*cos)
+		f.a2 = (a + 1) + (a-1)*cos - s
+		a0 := (a + 1) + (a-1)*cos + s
 		f.normalize(a0)
 	case highShelf:
 		s := 2 * math.Sqrt(a) * alpha
-		f.b0 = a * ((a+1) + (a-1)*cos + s)
-		f.b1 = -2 * a * ((a-1) + (a+1)*cos)
-		f.b2 = a * ((a+1) + (a-1)*cos - s)
-		f.a1 = 2 * ((a-1) - (a+1)*cos)
-		f.a2 = (a+1) - (a-1)*cos - s
-		a0 := (a+1) - (a-1)*cos + s
+		f.b0 = a * ((a + 1) + (a-1)*cos + s)
+		f.b1 = -2 * a * ((a - 1) + (a+1)*cos)
+		f.b2 = a * ((a + 1) + (a-1)*cos - s)
+		f.a1 = 2 * ((a - 1) - (a+1)*cos)
+		f.a2 = (a + 1) - (a-1)*cos - s
+		a0 := (a + 1) - (a-1)*cos + s
 		f.normalize(a0)
 	default:
 		f.b0 = 1 + alpha*a

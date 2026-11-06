@@ -6,7 +6,6 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/yxxbc/haruhikage-app/internal/netease"
 	"github.com/yxxbc/haruhikage-app/internal/player"
 )
 
@@ -56,23 +55,6 @@ func paletteFor(t *ui.Theme) palette {
 		onAccent:  ui.Hex("#ffffff"),
 		cardShade: ui.RGBA(0, 0, 0, 0.16),
 	}
-}
-
-// accountBadge marks a profile with its paid membership, if it has one.
-func accountBadge(c *ui.Context, p palette, prof *netease.Profile) {
-	m := prof.Membership()
-	if m == netease.MembershipNone {
-		return
-	}
-	label, bg, fg := "VIP", p.accent, p.onAccent
-	switch m {
-	case netease.MembershipSVIP:
-		label, bg, fg = "SVIP", ui.Oklch(0.82, 0.13, 85), ui.Hex("#2b1d00")
-	case netease.MembershipMusicPackage:
-		label, bg, fg = "音乐包", p.hover, p.muted
-	}
-	ui.Text(c, label).FontSize(9).FontWeight(800).LetterSpacing(0.3).
-		TextColor(fg).Padding(1, 5).Radius(999).Background(bg)
 }
 
 // iconButton is a borderless button showing an icon, which a soft circle
@@ -156,7 +138,7 @@ func pillButton(c *ui.Context, icon *ui.SVG, label string, bg, fg ui.Color) ui.E
 func (a *app) cover(c *ui.Context, url string, px int, size, radius float32) ui.Element {
 	p := a.pal
 	box := ui.Box(c).Size(size, size).Radius(radius).Center()
-	bmp := bitmap(a.art.get(netease.Sized(url, px), false))
+	bmp := bitmap(a.art.get(url, false))
 	in := artIn(box, bmp)
 	if in < 1 {
 		box.Background(p.hover)

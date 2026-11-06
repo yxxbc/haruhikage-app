@@ -52,7 +52,7 @@ var stageStyles = []stageStyle{
 	{
 		id:    "",
 		label: "流光",
-		draw: (*app).classicLine,
+		draw:  (*app).classicLine,
 	},
 	{
 		id:    "partita",

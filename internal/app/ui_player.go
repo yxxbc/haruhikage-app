@@ -10,6 +10,9 @@ import (
 	"github.com/yxxbc/haruhikage-app/internal/player"
 )
 
+// playerBarHeight is the height of the player along the foot of the pages.
+const playerBarHeight = 84
+
 // scrubState is a progress bar's own: the value dragged, while it is, and
 // the levels of the music its smoke follows.
 type scrubState struct {
@@ -30,6 +33,9 @@ func secs(s float64) time.Duration { return time.Duration(s * float64(time.Secon
 // rises and fades, thicker as the music is louder.
 func (a *app) scrubber(c *ui.Context, st *scrubState, track, fill ui.Color, height float32, smoke ui.Color) ui.Element {
 	pl := a.pl
+	if !a.visualActive {
+		c.DisableAnimations()
+	}
 	dur := pl.Duration().Seconds()
 	if !st.active && !st.held {
 		st.v = pl.Position().Seconds()
@@ -71,10 +77,13 @@ func (a *app) scrubber(c *ui.Context, st *scrubState, track, fill ui.Color, heig
 	knob = s.AnimateTo("knob", knob, ui.Snappy)
 	// The smoke settles away as the music pauses, and while dragging.
 	smoking := float32(0)
-	if smoke.A > 0 && a.settings.Smoke && pl.Playing() && !pl.Loading() && !st.active {
+	effects := a.visualActive && !c.Preferences().ReduceMotion
+	if effects && smoke.A > 0 && a.settings.Smoke && pl.Playing() && !pl.Loading() && !st.active {
 		smoking = 1
 	}
-	smoking = s.AnimateTo("smoke", smoking, ui.Animation{Duration: 600 * time.Millisecond})
+	if effects {
+		smoking = s.AnimateTo("smoke", smoking, ui.Animation{Duration: 600 * time.Millisecond})
+	}
 	s.Draw(func(p *ui.Painter, r ui.Rect) {
 		at := st.v
 		if !st.active {
@@ -112,6 +121,9 @@ func (a *app) scrubber(c *ui.Context, st *scrubState, track, fill ui.Color, heig
 			k := 12 * knob
 			p.Shadow(ui.Rect{X: head - k/2, Y: r.Y + (r.H-k)/2, W: k, H: k}, k/2, 0, 1, 3, 0, ui.RGBA(0, 0, 0, 0.3))
 			p.Fill(ui.Rect{X: head - k/2, Y: r.Y + (r.H-k)/2, W: k, H: k}, fill, k/2)
+		}
+		if !a.visualActive {
+			return
 		}
 		switch {
 		case smoking > 0.01 && (pl.Playing() || smoking < 1):
@@ -167,7 +179,7 @@ func drawSmoke(p *ui.Painter, x, y float32, now time.Time, loud float32, color u
 // tickTimes redraws the view as the next second of the track begins, for
 // the times shown.
 func (a *app) tickTimes(c *ui.Context) {
-	if a.pl.Playing() && a.pl.Ready() {
+	if a.visualActive && a.pl.Playing() && a.pl.Ready() {
 		pos := a.pl.Position()
 		c.After(time.Second - pos%time.Second + 10*time.Millisecond)
 	}
@@ -349,10 +361,6 @@ func (a *app) playerBar(c *ui.Context) {
 	pl := a.pl
 	tr := pl.Current()
 	a.tickTimes(c)
-	if a.picked.id != 0 && (tr == nil || tr.ID != a.picked.id || pl.Playing()) {
-		// Played, or gone: it says what it is again.
-		a.picked = pickedUp{}
-	}
 	// Over the foot of the page: while content is under it, its edge frosts
 	// it, with a hairline along the top.
 	edge := ui.Box(c.Key("bottom-edge")).Absolute().Left(0).Right(0).Bottom(0).Height(playerBarHeight).
@@ -392,8 +400,6 @@ func (a *app) playerBar(c *ui.Context) {
 					var sub string
 					color := p.muted
 					switch {
-					case a.picked.id == tr.ID:
-						sub = a.picked.heard
 					case pl.Loading():
 						sub = "正在缓冲…"
 					case pl.Err() != "":
@@ -409,7 +415,7 @@ func (a *app) playerBar(c *ui.Context) {
 			if info.Clicked() {
 				a.nowPlaying = true
 			}
-			a.likeButton(c.Key("like"), tr, 16, p.muted).Margin(0, 0, 0, 4).Shrink(0)
+			ui.Box(c).Margin(0, 0, 0, 4).Shrink(0).Children(func() { a.likeButton(c, tr, 16, p.muted) })
 		})
 
 		// Controls over the progress.
@@ -428,51 +434,13 @@ func (a *app) playerBar(c *ui.Context) {
 			if a.nowPlaying {
 				lyr = p.accent
 			}
-			label := "歌词"
-			if tr != nil && tr.ProgramID != 0 {
-				label = "节目简介"
-			}
-			if iconButton(c.Key("lyrics"), iconLyrics, 16, lyr, label).Clicked() && tr != nil {
+			if iconButton(c.Key("lyrics"), iconLyrics, 16, lyr, "歌词").Clicked() && tr != nil {
 				a.nowPlaying, a.npPane = true, a.lyricsPaneChosen()
 			}
 			if iconButton(c.Key("queue"), iconQueue, 16, p.muted, "播放队列").Clicked() && tr != nil {
 				a.nowPlaying, a.npPane = true, paneQueue
 			}
 			a.volumeButton(c, p.text.Alpha(0.75))
-		})
-	})
-}
-
-// pickupPrompt asks, over the page, whether to go on with the last stretch
-// of listening another device left paused.
-func (a *app) pickupPrompt(c *ui.Context) {
-	if a.picked.id == 0 || a.picked.closed || a.nowPlaying {
-		return
-	}
-	tr := a.pl.Current()
-	if tr == nil || tr.ID != a.picked.id || a.pl.Playing() {
-		return
-	}
-	p := a.pal
-	card := ui.Column(c.Key("pickup")).Absolute().Top(topBar(c)+16).Right(24).Width(360).
-		Padding(14).Gap(12).Radius(16).Background(p.bg).Border(1, p.hairline).
-		Shadow(0, 18, 40, -10, p.cardShade)
-	card.Children(func() {
-		ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
-			a.cover(c, tr.Album.PicURL, 120, 48, 8)
-			ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(3).Children(func() {
-				ui.Text(c, "继续上次播放").FontSize(11).FontWeight(700).TextColor(p.accent)
-				ui.Text(c, tr.Name).FontSize(14).FontWeight(600).SingleLine()
-				ui.Text(c, a.picked.heard).FontSize(11.5).TextColor(p.muted).SingleLine()
-			})
-			if iconButton(c.Key("pickup-close"), iconX, 16, p.faint, "忽略").Clicked() {
-				a.picked.closed = true
-			}
-		})
-		ui.Row(c).Children(func() {
-			if pillButton(c.Key("pickup-play"), iconPlay, "继续播放", p.accent, p.onAccent).Grow(1).Clicked() {
-				a.pl.TogglePlay()
-			}
 		})
 	})
 }

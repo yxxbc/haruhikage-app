@@ -8,7 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/shader"
 
-	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 )
 
 // The cover of Now Playing is a thing to touch. It tilts toward the
@@ -34,13 +34,13 @@ type coverState struct {
 	decided bool
 	// The song the cover shows, where it is in the play order, and where
 	// its cover goes as another comes (exit).
-	track int64
+	track string
 	at    int
 	exit  *ui.Motion
 }
 
 type coverKey struct {
-	id  int64
+	id  string
 	gen int
 }
 
@@ -88,14 +88,17 @@ const swipeRest = 140 * time.Millisecond
 
 // npCover shows the cover of tr, size across, which the pointer tilts,
 // drags and flings.
-func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float32) {
+func (a *app) npCover(c *ui.Context, tr *domain.Track, art *artwork, size float32) {
+	if !a.visualActive {
+		c.DisableAnimations()
+	}
 	cs, pl := &a.npCoverState, a.pl
 	far := size * 1.5 // where a cover flies off to
 	fling := func(dir int) {
 		cs.flung = dir
 		cs.off = ui.Point{X: -float32(dir) * far}
 	}
-	wrap := ui.Box(c.Key(coverKey{tr.ID, cs.gen})).Size(size, size).AlignSelf(ui.Center).Label("专辑封面")
+	wrap := ui.Box(c.Key(coverKey{tr.Key(), cs.gen})).Size(size, size).AlignSelf(ui.Center).Label("专辑封面")
 	entering := cs.enter != 0
 	if entering {
 		// A new cover's first frame: it shows where it comes in from.
@@ -104,14 +107,14 @@ func (a *app) npCover(c *ui.Context, tr *netease.Track, art *artwork, size float
 	// Another song, not flung to, comes in from the side it is on in the
 	// play order, and the cover before goes off the other way.
 	var enter *ui.Motion
-	if order, at := pl.PlayOrder(); cs.track != tr.ID {
+	if order, at := pl.PlayOrder(); cs.track != tr.Key() {
 		if cs.exit != nil && !entering {
 			dir := float32(stepDir(cs.at, at, len(order)))
 			// Its copy leaves from this frame on, which first knows the way.
 			cs.exit.X = -dir * size * 0.5
 			enter = &ui.Motion{X: dir * size * 0.5, Scale: 0.92}
 		}
-		cs.track, cs.at, cs.exit = tr.ID, at, &ui.Motion{Scale: 0.92}
+		cs.track, cs.at, cs.exit = tr.Key(), at, &ui.Motion{Scale: 0.92}
 	}
 	exit := cs.exit
 	if cs.flung != 0 {

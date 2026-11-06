@@ -6,8 +6,8 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 	"github.com/yxxbc/haruhikage-app/pkg/lyrics"
-	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // playingApp is an app playing a track with lyrics, at a position the test
@@ -15,8 +15,8 @@ import (
 func playingApp() (*app, *ui.Tester, *int) {
 	a := newTestApp()
 	a.settings = defaultSettings()
-	tr := netease.Track{ID: 7, Name: "宝船", Artists: []netease.Artist{{Name: "DOUDOU"}}, Duration: 200000}
-	a.pl.Cue([]netease.Track{tr})
+	tr := domain.Track{Provider: "wy", ID: "7", Name: "宝船", Artists: []domain.Artist{{Name: "DOUDOU"}}, Duration: 200000}
+	a.pl.Cue([]domain.Track{tr})
 	// A line every 10 seconds, sung over the first 5 of them.
 	var lrc string
 	for i := range 12 {
@@ -35,40 +35,33 @@ func playingApp() (*app, *ui.Tester, *int) {
 	return a, tt, &builds
 }
 
-// framesAt counts the frames the view asks for over a second, at 60 a
-// second, with playback held at pos.
-func framesAt(a *app, tt *ui.Tester, pos time.Duration) int {
+// framesAt counts actual builds, including ones driven by After timers:
+// Tester.Advance runs those itself, while FramePending alone misses them.
+// Painter-only GPU work still needs MYGO_FRAME_STATS in the native app.
+func framesAt(a *app, tt *ui.Tester, builds *int, pos time.Duration) int {
 	a.pl.Seek(pos)
 	tt.Frame()
 	tt.Advance(time.Second)
 	tt.Frame()
-	asked := 0
-	for range 60 {
-		tt.Advance(time.Second / 60)
-		if tt.FramePending() {
-			asked++
-			tt.Frame()
-		}
-	}
-	return asked
+	before := *builds
+	tt.Advance(time.Second)
+	return *builds - before
 }
 
-// Now Playing asks for frames only as fast as what it shows changes. The
-// Tester runs timers as it settles a frame, so this counts only what does
-// not change for a while: a frame log of the app (MYGO_FRAME_STATS) measures
-// the rest.
+// Idle lyric intervals avoid display-rate view builds in every preserved pane;
+// native paint-only animation budgets are measured separately with MYGO_FRAME_STATS.
 func TestNowPlayingFrameBudget(t *testing.T) {
-	a, tt, _ := playingApp()
-	if n := framesAt(a, tt, 12*time.Second); n > 3 {
+	a, tt, builds := playingApp()
+	if n := framesAt(a, tt, builds, 12*time.Second); n > 4 {
 		t.Errorf("a page under the player: %d frames a second", n)
 	}
 	// Its rows still, the wall asks for no more than the lyrics beside it
 	// do: it moves only as it is moved.
 	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
 	a.nowPlaying, a.npPane = true, paneLyrics
-	lyricsFrames := framesAt(a, tt, 12*time.Second)
+	lyricsFrames := framesAt(a, tt, builds, 12*time.Second)
 	a.npPane = paneWall
-	if n := framesAt(a, tt, 12*time.Second); n > lyricsFrames+3 {
+	if n := framesAt(a, tt, builds, 12*time.Second); n > lyricsFrames+4 {
 		t.Errorf("the wall, still: %d frames a second, the lyrics %d", n, lyricsFrames)
 	}
 	tt.SetPreferences(ui.Preferences{})
@@ -76,7 +69,7 @@ func TestNowPlayingFrameBudget(t *testing.T) {
 	a.settings.StageSparks = true
 	for _, s := range stageStyles {
 		a.settings.StageStyle = s.id
-		if n := framesAt(a, tt, 18*time.Second); n > 12 {
+		if n := framesAt(a, tt, builds, 18*time.Second); n > 12 {
 			t.Errorf("the stage between lines, in %s: %d frames a second", s.label, n)
 		}
 	}
@@ -86,8 +79,9 @@ func TestNowPlayingFrameBudget(t *testing.T) {
 // go, so that the backdrop stops asking for frames.
 func TestBackdropFadeEnds(t *testing.T) {
 	a, tt, _ := coverApp(t)
-	a.art.art[netease.Sized("a", 600)+"#backdrop"] = &artwork{tint: ui.RGB(200, 40, 40)}
-	a.art.art[netease.Sized("b", 600)+"#backdrop"] = &artwork{tint: ui.RGB(40, 40, 200)}
+	tt.SetPreferences(ui.Preferences{})
+	a.art.art["a#backdrop"] = &artwork{tint: ui.RGB(200, 40, 40)}
+	a.art.art["b#backdrop"] = &artwork{tint: ui.RGB(40, 40, 200)}
 	q := a.pl.Queue()
 	q[1].Album.PicURL, q[2].Album.PicURL = "a", "b"
 	tt.Frame()
@@ -100,5 +94,29 @@ func TestBackdropFadeEnds(t *testing.T) {
 	tt.Frame()
 	if a.backdropCache.before != nil {
 		t.Error("the last song's backdrop still fades after the fade")
+	}
+}
+
+// Hidden windows and ReduceMotion stop lyric/stage effects without pausing playback.
+func TestVisualInactivityStopsBuildTimers(t *testing.T) {
+	for _, hidden := range []bool{true, false} {
+		for _, pane := range []int{paneLyrics, paneStage, paneWall, paneQueue} {
+			a, tt, builds := playingApp()
+			a.nowPlaying, a.npPane = true, pane
+			a.settings.StageSparks, a.settings.Smoke = true, true
+			a.visualActive = !hidden
+			tt.SetPreferences(ui.Preferences{ReduceMotion: !hidden})
+			a.pl.Seek(2 * time.Second) // middle of a word, not a quiet gap
+			tt.Frame()
+			tt.Advance(2 * time.Second) // consume any timer armed before hiding
+			before := *builds
+			tt.Advance(2 * time.Second)
+			if got := *builds - before; got > 1 {
+				t.Errorf("hidden=%v pane=%d: idle effects rebuilt %d times", hidden, pane, got)
+			}
+			if !a.pl.Playing() {
+				t.Errorf("hidden=%v pane=%d paused playback", hidden, pane)
+			}
+		}
 	}
 }

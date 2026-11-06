@@ -1,44 +1,33 @@
 package player
 
 import (
+	"context"
 	"os"
 	"testing"
-	"time"
 
-	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 )
 
+// A deliberately supplied public fixture URL exercises the real transport;
+// this test never resolves a song or calls a paid/account service.
 func TestStreamLive(t *testing.T) {
-	if os.Getenv("LIVE") == "" {
-		t.Skip()
+	url := os.Getenv("PLAYER_TEST_AUDIO_URL")
+	if os.Getenv("LIVE") == "" || url == "" {
+		t.Skip("set LIVE and PLAYER_TEST_AUDIO_URL for explicit audio transport testing")
 	}
-	st, err := netease.SongURL(2652820720, "exhigh")
+	dl := startDownload(context.Background(), &domain.Stream{URL: url, Size: -1}, nil)
+	defer dl.Close()
+	s, err := openStream(dl, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	start := time.Now()
-	dl := startDownload(st.URL, st.Size, nil, nil)
-	s, err := openMP3Stream(dl, 278961)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log("opened in", time.Since(start), s.rate, s.frames, s.start)
+	defer s.Close()
 	buf := make([]float32, 4096)
 	n, err := s.Read(buf)
-	t.Log("read", n, err)
-	if err := s.SetPosition(int64(s.rate) * 120); err != nil {
-		t.Fatal(err, dl.n, dl.done, dl.err)
+	if n == 0 || err != nil {
+		t.Fatalf("first audio buffer: %d, %v", n, err)
 	}
-	total := 0
-	for i := 0; i < 200; i++ {
-		n, err := s.Read(buf)
-		total += n
-		if err != nil {
-			t.Fatal(err)
-		}
+	if err := s.SetPosition(int64(s.SampleRate())); err != nil {
+		t.Fatal(err)
 	}
-	t.Log("after seek read", total, "in", time.Since(start), "progress", dl.Progress())
-	b, ok := s.spec.at(int64(s.rate)*120 + 20000)
-	t.Log(ok, b)
-	s.Close()
 }

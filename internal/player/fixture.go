@@ -5,22 +5,21 @@ import (
 
 	"github.com/egoist/mygo/audio"
 
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 	"github.com/yxxbc/haruhikage-app/pkg/lyrics"
-	"github.com/yxxbc/haruhikage-app/internal/netease"
 )
 
 // These set a player up as it would be after loading, without loading
 // anything, for the tests of the views that show it.
 
 // Cue makes tracks the queue, in order, with the first current.
-func (p *Player) Cue(tracks []netease.Track) {
-	p.queue = tracks
-	p.order = make([]int, len(tracks))
-	for i := range p.order {
-		p.order[i] = i
+func (p *Player) Cue(tracks []domain.Track) {
+	p.stop()
+	p.setQueue(tracks)
+	p.at, p.track = -1, nil
+	if len(tracks) > 0 {
+		p.at, p.track = 0, &p.queue[0]
 	}
-	p.at = 0
-	p.track = &p.queue[0]
 }
 
 // SetLyrics gives the current track lines, as loaded.
@@ -42,4 +41,4 @@ func (p *Player) Attach(out *audio.Player) {
 }
 
 // SetStream makes st what the current track streams.
-func (p *Player) SetStream(st *netease.Stream) { p.info = st }
+func (p *Player) SetStream(st *domain.Stream) { p.info = st }

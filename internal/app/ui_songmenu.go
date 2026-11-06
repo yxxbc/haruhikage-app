@@ -4,72 +4,102 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
-
-	"github.com/yxxbc/haruhikage-app/internal/netease"
+	"github.com/yxxbc/haruhikage-app/internal/domain"
 )
 
-// copyText puts text on the clipboard; tests replace it.
 var copyText = func(text string) error { return mygo.Clipboard.Write(transfer.TextData(text)) }
 
-// songMenu is three dots that open the menu of tr.
-func (a *app) songMenu(c *ui.Context, tr *netease.Track, size float32, color ui.Color) ui.Element {
-	b := iconButton(c, iconMore, size, color, "更多")
-	b.Menu(a.songItems(tr, 0))
-	return b
+func (a *app) playNext(t domain.Track) {
+	if t.Ref().Valid() {
+		q := a.pl.Queue()
+		at := 0
+		if a.pl.Current() != nil {
+			_, at = a.pl.PlayOrder()
+			at++
+		}
+		if at > len(q) {
+			at = len(q)
+		}
+		q = append(append([]domain.Track(nil), q[:at]...), append([]domain.Track{t}, q[at:]...)...)
+		a.pl.PlayQueue(q, at)
+	}
 }
-
-// songItems builds the menu of what can be done with tr, behind its dots
-// or a right click on its row: copying its title, its title with its
-// artists, or the link to its page, opening its artists' or album's, and,
-// signed in, adding it to a playlist or taking it out of pid, the playlist
-// it is listed in, if set.
-func (a *app) songItems(tr *netease.Track, pid int64) func(m *ui.Menu) {
+func (a *app) songMore(c *ui.Context, t *domain.Track, size float32, color ui.Color) {
+	iconButton(c, iconMore, size, color, "歌曲菜单").Menu(a.songItems(t, ""))
+}
+func (a *app) songItems(t *domain.Track, pid string) func(*ui.Menu) {
+	track := *t
 	return func(m *ui.Menu) {
-		if tr.ProgramID != 0 {
-			a.programItems(m, tr)
-			return
+		if m.Item("立即播放").Chosen() {
+			a.pl.PlayQueue([]domain.Track{track}, 0)
 		}
-		if m.Item("复制歌名").Chosen() {
-			copyText(tr.Name)
+		if m.Item("下一首播放").Chosen() {
+			a.playNext(track)
 		}
-		if m.Item("复制歌名和歌手").Chosen() {
-			copyText(tr.Name + " - " + tr.ArtistNames())
+		label := "喜欢"
+		if a.liked[track.Key()] {
+			label = "取消喜欢"
 		}
-		m.Separator()
-		if m.Item("复制链接").Chosen() {
-			copyText(tr.URL())
+		if m.Item(label).Chosen() {
+			a.toggleLike(&track)
 		}
-		// Its artists' and album's pages, those NetEase has.
-		linked := tr.Album.ID != 0
-		for _, ar := range tr.Artists {
-			linked = linked || ar.ID != 0
-		}
-		if linked {
+		m.Submenu("添加到歌单", func(sub *ui.Menu) {
+			for _, pl := range a.mine {
+				if sub.Item(pl.Name).Chosen() {
+					a.addTracks(pl.ID, []domain.Track{track})
+				}
+			}
+			if sub.Item("新建歌单…").Chosen() {
+				a.newPlaylist(&track)
+			}
+		})
+		if pid != "" {
 			m.Separator()
-		}
-		for _, ar := range tr.Artists {
-			if ar.ID != 0 && m.Item("查看歌手："+ar.Name).Chosen() {
-				a.openArtist(ar.ID)
+			if m.Item("从歌单移除").Chosen() {
+				a.run(func() {
+					err := a.lib.RemoveTrack(a.ctx, pid, track.Ref())
+					a.post(func() {
+						if err != nil {
+							a.toast = "移除歌曲失败"
+							return
+						}
+						a.refreshLibrary()
+						if a.route.page == pagePlaylist && a.route.id == pid {
+							a.load(a.route)
+						}
+					})
+				})
 			}
 		}
-		if tr.Album.ID != 0 && m.Item("查看专辑："+tr.Album.Name).Chosen() {
-			a.openPage(route{page: pageAlbum, id: tr.Album.ID})
+		m.Separator()
+		if m.Item("复制歌曲名称").Chosen() {
+			_ = copyText(track.Name + " - " + track.ArtistNames())
 		}
-		a.playlistItems(m, tr, pid)
+		if track.URL() != "" && m.Item("复制歌曲链接").Chosen() {
+			_ = copyText(track.URL())
+		}
+		if track.Provider == "wy" && track.Album.ID != "" && m.Item("查看专辑").Chosen() {
+			a.open(route{page: pageAlbum, provider: "wy", id: track.Album.ID})
+		}
+		if track.Provider == "wy" {
+			for _, artist := range track.Artists {
+				if artist.ID != "" && m.Item("歌手："+artist.Name).Chosen() {
+					a.open(route{page: pageArtist, provider: "wy", id: artist.ID})
+				}
+			}
+		}
 	}
 }
-
-// programItems builds the menu of an episode: copying its title or the
-// link to its page, or opening its podcast's.
-func (a *app) programItems(m *ui.Menu, tr *netease.Track) {
-	if m.Item("复制节目名").Chosen() {
-		copyText(tr.Name)
+func (a *app) artistLinks(c *ui.Context, t *domain.Track, color, hover ui.Color) ui.Element {
+	return ui.Text(c, t.ArtistNames()).TextColor(color)
+}
+func (a *app) link(c *ui.Context, label string, color, hover ui.Color, r route) {
+	b := ui.ButtonBase(c).Label(label).TextColor(color)
+	if b.Hovered() {
+		b.TextColor(hover)
 	}
-	if m.Item("复制链接").Chosen() {
-		copyText(tr.URL())
-	}
-	m.Separator()
-	if m.Item("查看播客").Chosen() {
-		a.openPage(route{page: pagePodcast, id: tr.PodcastID})
+	b.Children(func() { ui.Text(c, label) })
+	if b.Clicked() {
+		a.open(r)
 	}
 }

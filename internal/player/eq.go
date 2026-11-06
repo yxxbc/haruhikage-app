@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/egoist/mygo/audio"
-
 )
 
 // The equalizer's ten bands, and the presets it ships, as Folia's
