@@ -1,7 +1,17 @@
-# 春日影
-[![Listed on Awesome MyGo](https://awesomemygo.dev/badge.svg)](https://awesomemygo.dev/apps/haruhikage-app)
+<h1 align="center">春日影</h1>
 
-用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的跨平台音乐播放器，原生界面，无 WebView。
+<p align="center">
+用 Go 和 <a href="https://github.com/egoist/mygo">MyGo</a> 写的跨平台音乐播放器，原生界面，无 WebView。
+</p>
+
+<p align="center">
+<a href="https://awesomemygo.dev/apps/haruhikage-app"><img src="https://awesomemygo.dev/badge.svg" alt="Listed on Awesome MyGo"></a>
+</p>
+
+<p align="center">
+<a href="image/now-playing-lyrics.png"><img src="image/awesome-mygo.webp" width="880" alt="正在播放：逐字歌词与翻译"></a><br>
+<sub>正在播放 · 逐字歌词与翻译</sub>
+</p>
 
 ## 功能
 
@@ -18,6 +28,17 @@
 - 刘海播放器：在屏幕顶部刘海处显示迷你播放器，悬停展开（在设置中开启）
 - 喜欢歌曲、播放队列、随机与循环播放
 - 浅色 / 深色 / 跟随系统
+
+## 界面
+
+![主界面：推荐、每日推荐与收藏的歌单](image/home.png)
+
+<p align="center"><sub>主界面 · 推荐、每日推荐与收藏的歌单</sub></p>
+
+| 待播清单 | 选歌 |
+| :---: | :---: |
+| ![待播清单：队列里的歌，随时切换](image/now-playing-picker.png) | ![选歌：在封面墙里挑下一首](image/now-playing-queue.png) |
+| <sub>队列里的歌，随时切换</sub> | <sub>在封面墙里挑下一首</sub> |
 
 ## 构建
 
